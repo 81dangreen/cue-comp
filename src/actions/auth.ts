@@ -36,6 +36,8 @@ export async function setupAction(_prev: ActionResult, formData: FormData): Prom
       name,
       email: email.toLowerCase(),
       passwordHash: await bcrypt.hash(password, 12),
+      // The first account on a new install runs the shared player directory.
+      directoryAdmin: true,
       memberships: {
         create: {
           role: "OWNER",

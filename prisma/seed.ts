@@ -39,6 +39,27 @@ async function playReady(tournamentId: string, limit = Infinity) {
   }
 }
 
+/** Northside Pool League: an organiser who uses the shared player directory but can't edit it. */
+export async function seedSecondOrganiser() {
+  if (await db.user.findUnique({ where: { email: "organiser@example.com" } })) return;
+  const org = await db.organization.create({ data: { name: "Northside Pool League", slug: "northside" } });
+  await db.user.create({
+    data: {
+      name: "League Organiser",
+      email: "organiser@example.com",
+      passwordHash: await bcrypt.hash("password123", 12),
+      memberships: { create: { organizationId: org.id, role: "OWNER" } },
+    },
+  });
+  await db.venue.create({
+    data: {
+      organizationId: org.id,
+      name: "Northside Social Club",
+      tables: { create: Array.from({ length: 4 }, (_, i) => ({ name: `Table ${i + 1}`, sortOrder: i + 1 })) },
+    },
+  });
+}
+
 async function main() {
   if ((await db.user.count()) > 0) {
     console.log("Database already has users — skipping seed. Run `npm run db:reset` to start fresh.");
@@ -51,6 +72,7 @@ async function main() {
       name: "Club Organiser",
       email: "admin@example.com",
       passwordHash: await bcrypt.hash("password123", 12),
+      directoryAdmin: true,
       memberships: { create: { organizationId: org.id, role: "OWNER" } },
     },
   });
@@ -125,7 +147,11 @@ async function main() {
     },
   });
 
-  console.log("Seeded demo data. Log in as admin@example.com / password123");
+  // 5. A second organiser sharing the same player directory, without directory-admin rights.
+  await seedSecondOrganiser();
+
+  console.log("Seeded demo data. Log in as admin@example.com / password123 (directory admin)");
+  console.log("Second organiser: organiser@example.com / password123 (Northside Pool League)");
 }
 
 main()

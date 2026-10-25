@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getTournamentFull, playerName } from "@/lib/queries";
 import { ActionButton, ActionForm, SubmitButton } from "@/components/forms";
+import { PlayerPicker } from "@/components/tournament/player-picker";
 import { Badge, Card, CardHeader, EmptyState, Field, Input, PageSkeleton } from "@/components/ui";
 
 export default function EntriesPage({ params }: PageProps<"/admin/tournaments/[id]/entries">) {
@@ -23,8 +24,9 @@ async function Entries({ params }: { params: PageProps<"/admin/tournaments/[id]/
   const locked = t.matches.length > 0;
   const enteredIds = new Set(t.entries.map((e) => e.playerId));
   const available = await db.player.findMany({
-    where: { organizationId: user.organizationId, id: { notIn: [...enteredIds] } },
+    where: { id: { notIn: [...enteredIds] } },
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+    select: { id: true, firstName: true, lastName: true, nickname: true, homeClub: true },
   });
   const entries = [...t.entries].sort(
     (a, b) => (a.seed ?? 999) - (b.seed ?? 999) || playerName(a.player).localeCompare(playerName(b.player)),
@@ -50,7 +52,9 @@ async function Entries({ params }: { params: PageProps<"/admin/tournaments/[id]/
           title={`Entries (${t.entries.length}${t.maxEntries ? ` / ${t.maxEntries}` : ""})`}
           subtitle={[
             locked ? "The draw has been made — reset it to change entries." : manual ? "Manual seeding: enter seeds then save." : null,
-            handicapped ? "Handicap ranks (1 = strongest) apply to matches that haven't started yet." : null,
+            handicapped
+              ? "Ranks (1 = strongest) come from the player directory. Changing one here applies to this comp only, for matches that haven't started."
+              : null,
           ]
             .filter(Boolean)
             .join(" ")}
@@ -78,9 +82,18 @@ async function Entries({ params }: { params: PageProps<"/admin/tournaments/[id]/
                     />
                   )}
                   <span className="flex-1 font-medium">{playerName(e.player)}</span>
+                  {e.status === "REGISTERED" && (e.contactEmail || e.contactPhone) && (
+                    <span className="text-xs text-muted">{[e.contactEmail, e.contactPhone].filter(Boolean).join(" · ")}</span>
+                  )}
                   {handicapped && (
                     <label className="flex items-center gap-1.5 text-xs text-muted">
-                      Rank
+                      {e.rank && playerRanks.has(e.playerId) && e.rank !== playerRanks.get(e.playerId) ? (
+                        <span className="font-semibold text-warn" title="Changed for this comp only">
+                          Comp rank (ranked {playerRanks.get(e.playerId)})
+                        </span>
+                      ) : (
+                        "Rank"
+                      )}
                       <Input
                         form="entries-form"
                         name={`rank-${e.id}`}
@@ -120,16 +133,15 @@ async function Entries({ params }: { params: PageProps<"/admin/tournaments/[id]/
           <CardHeader title="Add players" />
           <ActionForm action={addEntries.bind(null, t.id)} className="space-y-4 p-5" resetOnSuccess>
             {available.length > 0 && (
-              <div className="max-h-80 space-y-1 overflow-y-auto rounded-lg border border-border p-2">
-                {available.map((p) => (
-                  <label key={p.id} className="flex items-center gap-2 rounded px-2 py-1 text-sm hover:bg-surface-2">
-                    <input type="checkbox" name="playerId" value={p.id} />
-                    {playerName(p)}
-                  </label>
-                ))}
-              </div>
+              <PlayerPicker
+                players={available.map((p) => ({
+                  id: p.id,
+                  name: playerName(p),
+                  detail: [p.nickname && `“${p.nickname}”`, p.homeClub].filter(Boolean).join(" · ") || null,
+                }))}
+              />
             )}
-            <Field label="Or add a new player" hint="Creates the player in your database too">
+            <Field label="Or add a new player" hint="Adds them to the shared player directory too">
               <Input name="newPlayer" placeholder="First Last" />
             </Field>
             <SubmitButton>Add to tournament</SubmitButton>

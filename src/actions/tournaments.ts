@@ -6,6 +6,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireTournament, requireUser } from "@/lib/auth";
 import { DISCIPLINES, FORMATS } from "@/lib/constants";
+import { describeMatches, sameNamePlayers } from "@/lib/directory";
 import { HANDICAP_STYLES, parseStartTable, type HandicapStyle } from "@/lib/handicap";
 import { publish } from "@/lib/events";
 import {
@@ -144,16 +145,17 @@ export async function addEntries(tournamentId: string, _prev: ActionResult, form
     const newName = String(formData.get("newPlayer") ?? "").trim();
     if (newName) {
       const [firstName, ...rest] = newName.split(/\s+/);
-      const p = await db.player.create({
-        data: { firstName, lastName: rest.join(" "), organizationId: user.organizationId },
-      });
+      const lastName = rest.join(" ");
+      // Players are shared across organisers, so don't create a second record for someone already listed.
+      const matches = await sameNamePlayers(firstName, lastName);
+      if (matches.length) {
+        throw new Error(`${newName} is already in the player directory (${describeMatches(matches)}). Search for them in the list above.`);
+      }
+      const p = await db.player.create({ data: { firstName, lastName, organizationId: user.organizationId } });
       ids.push(p.id);
     }
     if (!ids.length) throw new Error("Select at least one player");
-    const players = await db.player.findMany({
-      where: { id: { in: ids }, organizationId: user.organizationId },
-      select: { id: true },
-    });
+    const players = await db.player.findMany({ where: { id: { in: ids } }, select: { id: true } });
     const current = await db.entry.count({ where: { tournamentId, status: { not: "WITHDRAWN" } } });
     if (tournament.maxEntries && current + players.length > tournament.maxEntries) {
       throw new Error(`This tournament is limited to ${tournament.maxEntries} players`);
@@ -199,11 +201,21 @@ export async function saveEntries(tournamentId: string, _prev: ActionResult, for
     const drawMade = (await db.match.count({ where: { tournamentId } })) > 0;
 
     if (tournament.handicapStyle) {
+      const directoryRanks = new Map(
+        (
+          await db.playerRank.findMany({
+            where: { playerId: { in: entries.map((e) => e.playerId) }, discipline: tournament.discipline },
+          })
+        ).map((r) => [r.playerId, r.rank]),
+      );
       for (const e of entries) {
         const raw = String(formData.get(`rank-${e.id}`) ?? "").trim();
         const rank = raw ? Number(raw) : null;
         if (rank !== null && (!Number.isInteger(rank) || rank < 1)) throw new Error("Ranks must be whole numbers from 1");
-        await db.entry.update({ where: { id: e.id }, data: { rank } });
+        // Before the draw, only a comp-only override is stored; an unchanged rank keeps following the
+        // directory (so central re-ranking still applies) until the draw freezes it.
+        const override = drawMade || rank !== directoryRanks.get(e.playerId) ? rank : null;
+        await db.entry.update({ where: { id: e.id }, data: { rank: override } });
       }
     }
     if (tournament.seeding !== "MANUAL" || drawMade) return "Saved";
@@ -272,14 +284,19 @@ export async function registerForTournament(slug: string, _prev: ActionResult, f
   if (t.maxEntries && count >= t.maxEntries) return { error: "This tournament is full" };
 
   const email = parsed.data.email.toLowerCase();
+  const phone = parsed.data.phone || null;
+  // Reuse the person's directory record when their email is already known; otherwise add them.
   const player =
-    (await db.player.findFirst({ where: { organizationId: t.organizationId, email } })) ??
+    (await db.player.findFirst({ where: { email: { equals: email, mode: "insensitive" } } })) ??
     (await db.player.create({ data: { ...parsed.data, email, organizationId: t.organizationId } }));
   const existing = await db.entry.findUnique({
     where: { tournamentId_playerId: { tournamentId: t.id, playerId: player.id } },
   });
   if (existing) return { error: "You're already registered for this tournament" };
-  await db.entry.create({ data: { tournamentId: t.id, playerId: player.id, status: "REGISTERED" } });
+  // The organiser sees the contact details given for this entry; the directory record's stay with directory admins.
+  await db.entry.create({
+    data: { tournamentId: t.id, playerId: player.id, status: "REGISTERED", contactEmail: email, contactPhone: phone },
+  });
   publish(t.id);
   return { message: "You're registered! The organiser will confirm your place." };
 }

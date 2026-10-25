@@ -54,6 +54,19 @@ Unpair a lost tablet from the venue page. Tablets reach the server over the venu
 computer's network address when you browse the admin on `localhost`. For a real event, run a production build
 (`npm run build && npm start`) rather than the dev server.
 
+## Player directory
+
+Players live in **one directory shared by every organiser and venue**, so a person's record, ranks and competition
+history follow them everywhere.
+
+- **Directory admins** (`User.directoryAdmin`; the first account on a new install) edit players and contact details,
+  set ranks individually or in bulk, merge duplicates and bulk-import.
+- **Organisers** search the directory, enter anyone into their comps, and add missing players (a same-name check asks
+  them to confirm it's a different person). They see ranks but can't change them, except as a **comp-only override** on
+  a tournament's entries page, which never touches the player's ranking.
+- **Contact details** on the directory record are visible to directory admins only. Details a player gives when
+  self-registering are stored on that entry, for that comp's organisers.
+
 ## Handicaps
 
 Players have a **rank per discipline** (1 = strongest), set on the player's page or for everyone at once under

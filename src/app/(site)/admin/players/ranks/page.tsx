@@ -21,10 +21,21 @@ export default function RanksPage({ searchParams }: PageProps<"/admin/players/ra
 
 async function Ranks({ searchParams }: { searchParams: PageProps<"/admin/players/ranks">["searchParams"] }) {
   const user = await requireUser();
-  const { discipline: raw } = await searchParams;
+  if (!user.directoryAdmin) {
+    return (
+      <Card className="max-w-xl">
+        <EmptyState title="Rankings are managed by directory admins">
+          To use a different rank in one of your comps, change it on that tournament&apos;s entries page.
+        </EmptyState>
+      </Card>
+    );
+  }
+  const { discipline: raw, q } = await searchParams;
   const discipline: Discipline = typeof raw === "string" && raw in DISCIPLINES ? (raw as Discipline) : "EIGHT_BALL";
+  const query = typeof q === "string" ? q.trim() : "";
+  const contains = { contains: query, mode: "insensitive" as const };
   const players = await db.player.findMany({
-    where: { organizationId: user.organizationId },
+    where: query ? { OR: [{ firstName: contains }, { lastName: contains }, { homeClub: contains }] } : {},
     include: { ranks: { where: { discipline } } },
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
   });
@@ -34,13 +45,13 @@ async function Ranks({ searchParams }: { searchParams: PageProps<"/admin/players
     <div className="max-w-3xl">
       <PageHeader
         title="Handicap ranks"
-        subtitle="1 is the strongest. Handicapped tournaments use the rank for their discipline; leave blank for unranked players."
+        subtitle="Rankings for the whole player directory. 1 is the strongest; handicapped comps use the rank for their discipline. Leave blank for unranked players."
       />
       <nav className="mb-4 flex flex-wrap gap-2">
         {Object.entries(DISCIPLINES).map(([key, label]) => (
           <Link
             key={key}
-            href={`/admin/players/ranks?discipline=${key}`}
+            href={`/admin/players/ranks?discipline=${key}${query ? `&q=${encodeURIComponent(query)}` : ""}`}
             className={cx(
               "rounded-full border px-3 py-1 text-sm font-medium",
               key === discipline ? "border-accent bg-accent text-accent-fg" : "border-border bg-surface hover:bg-surface-2",
@@ -50,20 +61,27 @@ async function Ranks({ searchParams }: { searchParams: PageProps<"/admin/players
           </Link>
         ))}
       </nav>
+      <form className="mb-4">
+        <input type="hidden" name="discipline" value={discipline} />
+        <Input name="q" defaultValue={query} placeholder="Filter by name or home club…" />
+      </form>
       <Card>
         {players.length === 0 ? (
-          <EmptyState title="No players yet">Add players first, then rank them here.</EmptyState>
+          <EmptyState title={query ? "No players match" : "No players yet"}>
+            {query ? "Try a different search." : "Add players first, then rank them here."}
+          </EmptyState>
         ) : (
           // Keyed by discipline so switching tabs resets the boxes to that discipline's saved ranks.
-          <ActionForm key={discipline} action={saveDisciplineRanks.bind(null, discipline)} className="p-5">
+          <ActionForm key={discipline + query} action={saveDisciplineRanks.bind(null, discipline)} className="p-5">
             <p className="mb-3 text-sm text-muted">
-              {DISCIPLINES[discipline]}: {ranked} of {players.length} players ranked
+              {DISCIPLINES[discipline]}: {ranked} of {players.length} {query ? "matching " : ""}players ranked
             </p>
             <ul className="divide-y divide-border">
               {players.map((p) => (
                 <li key={p.id} className="flex items-center justify-between gap-4 py-2">
                   <label htmlFor={`rank-${p.id}`} className="font-medium">
                     {playerName(p)}
+                    {p.homeClub && <span className="ml-2 text-sm font-normal text-muted">{p.homeClub}</span>}
                   </label>
                   <Input
                     id={`rank-${p.id}`}

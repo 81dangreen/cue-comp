@@ -25,12 +25,14 @@ model Organization {
 }
 
 model User {
-  id           String       @id @default(cuid())
-  email        String       @unique
-  name         String
-  passwordHash String
-  createdAt    DateTime     @default(now())
-  memberships  Membership[]
+  id             String       @id @default(cuid())
+  email          String       @unique
+  name           String
+  passwordHash   String
+  // Central admin of the shared player directory: edits players, contact details and ranks for everyone.
+  directoryAdmin Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  memberships    Membership[]
 }
 
 model Membership {
@@ -44,21 +46,25 @@ model Membership {
   @@unique([userId, organizationId])
 }
 
+// The shared player directory: one record per person across every organiser and venue.
+// Records, contact details and ranks are managed by directory admins (User.directoryAdmin).
 model Player {
-  id             String       @id @default(cuid())
-  organizationId String
+  id             String        @id @default(cuid())
+  // Organisation that first added the player (for reference only; players aren't owned by it).
+  organizationId String?
   firstName      String
   lastName       String
   nickname       String?
   email          String?
   phone          String?
   country        String?
-  createdAt      DateTime     @default(now())
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  homeClub       String?
+  createdAt      DateTime      @default(now())
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   entries        Entry[]
   ranks          PlayerRank[]
 
-  @@index([organizationId, lastName])
+  @@index([lastName, firstName])
 }
 
 model Venue {
@@ -131,8 +137,12 @@ model Entry {
   status       String     @default("CONFIRMED") // REGISTERED | CONFIRMED | WITHDRAWN
   groupId      String?
   finalRank    Int?
-  // Handicap rank for this comp (1 = strongest). Frozen from the player's rank when the draw is made.
+  // Handicap rank for this comp (1 = strongest). Frozen from the player's rank when the draw is made;
+  // an organiser can override it for this comp only without touching the player's ranking.
   rank         Int?
+  // Contact details given when the player registered for this comp, for its organisers.
+  contactEmail String?
+  contactPhone String?
   createdAt    DateTime   @default(now())
   tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
   player       Player     @relation(fields: [playerId], references: [id], onDelete: Cascade)

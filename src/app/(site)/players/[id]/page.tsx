@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { db } from "@/lib/db";
 import { playerName } from "@/lib/queries";
-import { Card, CardHeader, EmptyState, PageSkeleton } from "@/components/ui";
+import { DISCIPLINES, type Discipline } from "@/lib/constants";
+import { Badge, Card, CardHeader, EmptyState, PageSkeleton } from "@/components/ui";
 
 export default function PlayerPage({ params }: PageProps<"/players/[id]">) {
   return (
@@ -32,6 +33,7 @@ async function Player({ params }: { params: PageProps<"/players/[id]">["params"]
         include: { tournament: true },
         orderBy: { createdAt: "desc" },
       },
+      ranks: { orderBy: { discipline: "asc" } },
     },
   });
   if (!player) notFound();
@@ -69,8 +71,19 @@ async function Player({ params }: { params: PageProps<"/players/[id]">["params"]
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">{playerName(player)}</h1>
-        {(player.nickname || player.country) && (
-          <p className="mt-1 text-muted">{[player.nickname && `“${player.nickname}”`, player.country].filter(Boolean).join(" · ")}</p>
+        {(player.nickname || player.homeClub || player.country) && (
+          <p className="mt-1 text-muted">
+            {[player.nickname && `“${player.nickname}”`, player.homeClub, player.country].filter(Boolean).join(" · ")}
+          </p>
+        )}
+        {player.ranks.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {player.ranks.map((r) => (
+              <Badge key={r.discipline} tone="accent">
+                {DISCIPLINES[r.discipline as Discipline] ?? r.discipline}: Rank {r.rank}
+              </Badge>
+            ))}
+          </div>
         )}
       </div>
 

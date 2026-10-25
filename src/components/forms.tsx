@@ -21,10 +21,20 @@ export function ActionForm({
   id?: string;
   resetOnSuccess?: boolean;
 }) {
-  const [state, formAction] = useActionState(action, undefined);
+  const submitted = useRef<FormData | null>(null);
+  const [state, formAction] = useActionState(async (prev: ActionResult, formData: FormData) => {
+    submitted.current = formData;
+    return action(prev, formData);
+  }, undefined);
   const ref = useRef<HTMLFormElement>(null);
   useEffect(() => {
-    if (resetOnSuccess && state && !state.error) ref.current?.reset();
+    if (!ref.current || !state) return;
+    if (state.error && submitted.current) {
+      // React resets a form after its action returns, even with an error; put the user's input back.
+      restoreFields(ref.current, submitted.current);
+    } else if (!state.error && resetOnSuccess) {
+      ref.current.reset();
+    }
   }, [state, resetOnSuccess]);
 
   return (
@@ -34,6 +44,19 @@ export function ActionForm({
       {state?.message && !state.error && <p className="mt-3 text-sm text-accent">{state.message}</p>}
     </form>
   );
+}
+
+/** Refill a form's fields (including ones attached via the `form` attribute) from submitted data. */
+function restoreFields(form: HTMLFormElement, data: FormData) {
+  for (const el of Array.from(form.elements)) {
+    if (!(el instanceof HTMLInputElement || el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement) || !el.name) continue;
+    if (el instanceof HTMLInputElement && (el.type === "checkbox" || el.type === "radio")) {
+      el.checked = data.getAll(el.name).includes(el.value);
+    } else if (!(el instanceof HTMLInputElement && (el.type === "file" || el.type === "hidden"))) {
+      const value = data.get(el.name);
+      if (typeof value === "string") el.value = value;
+    }
+  }
 }
 
 export function SubmitButton({ children, pendingText, ...props }: ComponentProps<typeof Button> & { pendingText?: string }) {

@@ -12,6 +12,8 @@ export type CurrentUser = {
   organizationId: string;
   organizationName: string;
   role: Role;
+  /** Central admin of the shared player directory (players, contact details, ranks). */
+  directoryAdmin: boolean;
 };
 
 /**
@@ -35,6 +37,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
     organizationId: membership.organizationId,
     organizationName: membership.organization.name,
     role: membership.role as Role,
+    directoryAdmin: user.directoryAdmin,
   };
 });
 
@@ -66,4 +69,11 @@ export async function requireMatch(matchId: string, minRole: Role = "SCORER") {
   });
   if (!match) throw new Error("Match not found");
   return { user, match };
+}
+
+/** For changes to the shared player directory: only its central admins may make them. */
+export async function requireDirectoryAdmin(): Promise<CurrentUser> {
+  const user = await requireUser();
+  if (!user.directoryAdmin) throw new Error("Only player directory admins can change players and rankings");
+  return user;
 }

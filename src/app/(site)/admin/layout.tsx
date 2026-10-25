@@ -10,7 +10,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <TabNav
             tabs={[
               { href: "/admin", label: "Tournaments" },
-              { href: "/admin/players", label: "Players", prefix: true },
+              { href: "/admin/players", label: "Player directory", prefix: true },
               { href: "/admin/venues", label: "Venues & tables", prefix: true },
             ]}
           />
