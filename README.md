@@ -54,24 +54,23 @@ Unpair a lost tablet from the venue page. Tablets reach the server over the venu
 computer's network address when you browse the admin on `localhost`. For a real event, run a production build
 (`npm run build && npm start`) rather than the dev server.
 
-## Deploying (Railway)
+## Deploying (Render)
 
 The app runs as **one always-on Node server plus Postgres**. Live updates are passed around inside the server process,
-so run a single instance (no autoscaling / replicas) until `src/lib/events.ts` moves to a shared pub/sub.
+so run a single instance (no autoscaling) until `src/lib/events.ts` moves to a shared pub/sub.
 
-1. Push this repo to a private GitHub repository.
-2. In Railway: **New project → Deploy from GitHub repo**, pick the repo. Then **+ New → Database → PostgreSQL**.
-3. On the app service, **Variables**:
-   - `DATABASE_URL` = reference the Postgres service's `DATABASE_URL`
-   - `SESSION_PASSWORD` = a random 64-character string (`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`)
-   - `SETUP_KEY` = any secret phrase; needed once to create the owner account
-   - `NEXT_PUBLIC_APP_NAME` (optional)
-4. **Settings → Networking → Generate domain** (or add your own domain and the CNAME record it shows).
-   Optionally set the healthcheck path to `/api/health`.
-5. Open the site, go to **Get started**, enter the setup key, and create your organisation.
+1. In Render: **New → Blueprint**, connect GitHub and pick this repo. `render.yaml` creates the web service and the
+   Postgres database (Frankfurt), wires up `DATABASE_URL` and generates `SESSION_PASSWORD`.
+2. When asked, enter `SETUP_KEY`: any secret phrase. You need it once, to create the owner account.
+3. Wait for the first deploy, then open the `*.onrender.com` address, go to **Get started**, enter the setup key and
+   create your organisation.
+4. Custom domain: web service → **Settings → Custom Domains → Add**, then add the DNS record Render shows at your
+   registrar. HTTPS is automatic (required for `.app` domains).
+
+Any host that runs a long-lived Node process works the same way (Railway, Fly.io, a VPS): set `DATABASE_URL`,
+`SESSION_PASSWORD` and `SETUP_KEY`, build with `npm run build`, start with `npm start`.
 
 `npm start` applies pending database migrations before starting, so every deploy updates the schema automatically.
-Set a usage limit under the workspace's billing settings so costs can't run away.
 
 **Hardening in place:** setup requires `SETUP_KEY` in production; login, setup and tablet pairing are rate limited;
 cookies are `Secure` behind HTTPS; standard security headers (no framing except stream overlays).

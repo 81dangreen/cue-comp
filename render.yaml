@@ -1,0 +1,31 @@
+# Render Blueprint: one always-on web service plus Postgres, both in Frankfurt (closest region to the UK).
+# Render dashboard → New → Blueprint → pick this repo. You'll be asked for SETUP_KEY once.
+# Run a single instance: live updates are passed around inside the server process (see src/lib/events.ts).
+services:
+  - type: web
+    name: cue-comp
+    runtime: node
+    plan: starter # always on; the free plan sleeps after 15 idle minutes, which would break tablets
+    region: frankfurt
+    buildCommand: npm ci && npm run build
+    startCommand: npm start # applies pending database migrations, then starts Next.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: cue-comp-db
+          property: connectionString
+      - key: SESSION_PASSWORD
+        generateValue: true
+      - key: SETUP_KEY
+        sync: false
+
+databases:
+  - name: cue-comp-db
+    plan: basic-256mb # smallest paid plan; free databases are deleted after 30 days
+    region: frankfurt
+    postgresMajorVersion: "17"
+    databaseName: cuecomp
+    user: cuecomp
