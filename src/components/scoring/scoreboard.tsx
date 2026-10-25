@@ -1,0 +1,220 @@
+"use client";
+
+import Link from "next/link";
+import { useOptimistic, useState, useTransition } from "react";
+import type { ActionResult } from "../forms";
+import { cx } from "../ui";
+
+type Props = {
+  roundName: string;
+  tournamentName: string;
+  /** Omitted on table tablets, which have nowhere to go back to. */
+  backHref?: string;
+  raceTo: number;
+  status: string;
+  tableName?: string | null;
+  player1: string;
+  player2: string;
+  score1: number;
+  score2: number;
+  winnerSlot: 1 | 2 | null;
+  breakSlot?: number | null;
+  canUndo: boolean;
+  frames: { winner: number; breakAndRun: boolean }[];
+  /** Ask before saving the rack that wins the match (players score their own matches on tablets). */
+  confirmFinish?: boolean;
+  addFrame: (slot: 1 | 2, breakAndRun: boolean) => Promise<ActionResult>;
+  undo: () => Promise<ActionResult>;
+};
+
+const SIDE = {
+  1: { chip: "bg-sky-400/25 text-sky-100", ring: "ring-sky-300/60" },
+  2: { chip: "bg-amber-400/25 text-amber-100", ring: "ring-amber-300/60" },
+} as const;
+
+export function Scoreboard(props: Props) {
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [finishing, setFinishing] = useState<{ slot: 1 | 2; breakAndRun: boolean } | null>(null);
+  const [score, addOptimistic] = useOptimistic(
+    { s1: props.score1, s2: props.score2 },
+    (state, delta: { slot: 1 | 2; by: number }) => ({
+      s1: state.s1 + (delta.slot === 1 ? delta.by : 0),
+      s2: state.s2 + (delta.slot === 2 ? delta.by : 0),
+    }),
+  );
+
+  const finished = props.status === "COMPLETED";
+  const scorable = props.status === "READY" || props.status === "LIVE";
+  const name = (slot: 1 | 2) => (slot === 1 ? props.player1 : props.player2);
+
+  function send(slot: 1 | 2, breakAndRun: boolean) {
+    setError(null);
+    startTransition(async () => {
+      addOptimistic({ slot, by: 1 });
+      const res = await props.addFrame(slot, breakAndRun);
+      if (res?.error) setError(res.error);
+    });
+  }
+
+  function scoreRack(slot: 1 | 2, breakAndRun = false) {
+    if (!scorable || pending) return;
+    const next = (slot === 1 ? score.s1 : score.s2) + 1;
+    if (props.confirmFinish && next >= props.raceTo) {
+      setFinishing({ slot, breakAndRun });
+      return;
+    }
+    send(slot, breakAndRun);
+  }
+
+  function undo() {
+    const last = props.frames.at(-1);
+    if (!last || pending) return;
+    setError(null);
+    startTransition(async () => {
+      addOptimistic({ slot: last.winner as 1 | 2, by: -1 });
+      const res = await props.undo();
+      if (res?.error) setError(res.error);
+    });
+  }
+
+  const panel = (slot: 1 | 2) => {
+    const value = slot === 1 ? score.s1 : score.s2;
+    const won = finished && props.winnerSlot === slot;
+    const lost = finished && props.winnerSlot !== slot;
+    const hill = !finished && value === props.raceTo - 1;
+    return (
+      <div className={cx("relative flex flex-1 flex-col", lost && "opacity-40")}>
+        <button
+          type="button"
+          onClick={() => scoreRack(slot)}
+          disabled={!scorable}
+          className={cx(
+            "flex flex-1 flex-col items-center justify-center gap-3 rounded-3xl border border-white/10 p-4 shadow-xl transition select-none",
+            "bg-gradient-to-b from-white/[0.09] to-white/[0.03]",
+            scorable && "active:scale-[0.985] active:from-white/15",
+            won && "border-emerald-300/70 from-emerald-400/25 to-emerald-400/5",
+          )}
+        >
+          <span className="flex max-w-full items-center gap-2">
+            <span className={cx("h-3 w-3 shrink-0 rounded-full", slot === 1 ? "bg-sky-300" : "bg-amber-300")} />
+            <span className="truncate text-2xl font-semibold sm:text-4xl">{name(slot)}</span>
+          </span>
+          <span className="text-[8rem] leading-none font-black tabular-nums drop-shadow-lg sm:text-[13rem]">{value}</span>
+          <span className="flex h-7 items-center gap-2">
+            {props.breakSlot === slot && !finished && (
+              <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white/80">Broke first</span>
+            )}
+            {hill && <span className="rounded-full bg-amber-300 px-3 py-1 text-xs font-bold text-black">HILL</span>}
+            {won && <span className="rounded-full bg-emerald-300 px-4 py-1 text-sm font-bold text-black">WINNER</span>}
+          </span>
+        </button>
+        {scorable && (
+          <button
+            type="button"
+            onClick={() => scoreRack(slot, true)}
+            className="mt-2 rounded-xl border border-white/10 bg-white/5 py-3 text-sm font-medium text-white/75 active:bg-white/15"
+          >
+            + Break &amp; run
+          </button>
+        )}
+      </div>
+    );
+  };
+
+  const confirmScore = finishing
+    ? finishing.slot === 1
+      ? [score.s1 + 1, score.s2]
+      : [score.s1, score.s2 + 1]
+    : null;
+
+  return (
+    <div className="flex min-h-dvh flex-col bg-[radial-gradient(ellipse_at_top,#14513c_0%,#0a2a1f_45%,#05120d_100%)] p-3 text-white sm:p-6">
+      <header className="mb-3 flex items-center justify-between gap-3 text-sm text-white/70">
+        {props.backHref ? (
+          <Link href={props.backHref} className="rounded-lg px-2 py-1 hover:bg-white/10">
+            ← Back
+          </Link>
+        ) : (
+          <span className="rounded-lg bg-white/10 px-3 py-1 font-semibold text-white">{props.tableName}</span>
+        )}
+        <div className="min-w-0 truncate text-center">
+          <span className="font-semibold text-white">{props.tournamentName}</span> · {props.roundName}
+        </div>
+        <div className="text-right whitespace-nowrap">
+          {props.backHref && props.tableName && <span className="mr-2">{props.tableName}</span>}
+          Race to <span className="text-lg font-bold text-white">{props.raceTo}</span>
+        </div>
+      </header>
+
+      <div className="flex flex-1 flex-col gap-3 sm:flex-row">
+        {panel(1)}
+        {panel(2)}
+      </div>
+
+      <footer className="mt-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex max-w-full gap-1 overflow-x-auto" aria-label="Rack history">
+          {props.frames.map((f, i) => (
+            <span
+              key={i}
+              title={`Rack ${i + 1}: ${name(f.winner as 1 | 2)}${f.breakAndRun ? " (break & run)" : ""}`}
+              className={cx(
+                "grid h-7 w-7 shrink-0 place-items-center rounded-md text-xs font-bold",
+                SIDE[f.winner as 1 | 2].chip,
+                f.breakAndRun && "ring-2 ring-white/70",
+              )}
+            >
+              {i + 1}
+            </span>
+          ))}
+        </div>
+        <div className="flex items-center gap-3">
+          {error && <span className="text-sm font-medium text-red-300">{error}</span>}
+          {props.status === "READY" && <span className="text-sm text-white/70">Tap a player to score the first rack</span>}
+          <button
+            type="button"
+            onClick={undo}
+            disabled={!props.canUndo || pending || (props.confirmFinish && finished)}
+            className="rounded-xl border border-white/10 bg-white/10 px-5 py-3 text-sm font-semibold active:bg-white/20 disabled:opacity-30"
+          >
+            Undo last rack
+          </button>
+        </div>
+      </footer>
+
+      {finishing && confirmScore && (
+        <div className="fixed inset-0 z-40 grid place-items-center bg-black/70 p-6" role="dialog" aria-modal="true">
+          <div className="w-full max-w-md rounded-3xl border border-white/15 bg-[#0d2a20] p-6 text-center shadow-2xl">
+            <p className="text-sm font-medium tracking-wide text-white/60 uppercase">Confirm result</p>
+            <p className="mt-3 text-3xl font-bold">{name(finishing.slot)} wins</p>
+            <p className="mt-2 text-5xl font-black tabular-nums">
+              {confirmScore[0]} – {confirmScore[1]}
+            </p>
+            <p className="mt-3 text-sm text-white/60">
+              {props.player1} v {props.player2}
+            </p>
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setFinishing(null)}
+                className="rounded-xl border border-white/15 bg-white/5 py-4 text-lg font-semibold active:bg-white/15"
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  send(finishing.slot, finishing.breakAndRun);
+                  setFinishing(null);
+                }}
+                className="rounded-xl bg-emerald-400 py-4 text-lg font-bold text-black active:bg-emerald-300"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

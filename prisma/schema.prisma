@@ -1,0 +1,210 @@
+// CueScore-style competition management.
+// Postgres everywhere: embedded locally (`npm run db:start`), managed on Railway in production.
+// String columns are used instead of enums so the schema stays portable —
+// allowed values live in src/lib/constants.ts.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id          String       @id @default(cuid())
+  name        String
+  slug        String       @unique
+  createdAt   DateTime     @default(now())
+  memberships Membership[]
+  players     Player[]
+  venues      Venue[]
+  tournaments Tournament[]
+  devices     Device[]
+}
+
+model User {
+  id           String       @id @default(cuid())
+  email        String       @unique
+  name         String
+  passwordHash String
+  createdAt    DateTime     @default(now())
+  memberships  Membership[]
+}
+
+model Membership {
+  id             String       @id @default(cuid())
+  userId         String
+  organizationId String
+  role           String       @default("ADMIN") // OWNER | ADMIN | SCORER
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+}
+
+model Player {
+  id             String       @id @default(cuid())
+  organizationId String
+  firstName      String
+  lastName       String
+  nickname       String?
+  email          String?
+  phone          String?
+  country        String?
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  entries        Entry[]
+
+  @@index([organizationId, lastName])
+}
+
+model Venue {
+  id             String       @id @default(cuid())
+  organizationId String
+  name           String
+  address        String?
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tables         Table[]
+  tournaments    Tournament[]
+}
+
+model Table {
+  id               String    @id @default(cuid())
+  venueId          String
+  name             String
+  sortOrder        Int       @default(0)
+  streamUrl        String?
+  venue            Venue     @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  matches          Match[]
+  // One-time code a tablet enters (or scans) to become this table's scoreboard.
+  pairingCode      String?   @unique
+  pairingExpiresAt DateTime?
+  devices          Device[]
+}
+
+model Tournament {
+  id                 String       @id @default(cuid())
+  organizationId     String
+  venueId            String?
+  name               String
+  slug               String       @unique
+  description        String?
+  discipline         String       @default("EIGHT_BALL")
+  format             String       @default("SINGLE_ELIM") // SINGLE_ELIM | DOUBLE_ELIM | ROUND_ROBIN | GROUPS_KO
+  raceTo             Int          @default(5)
+  raceToFinal        Int?
+  maxEntries         Int?
+  entryFee           String?
+  startsAt           DateTime?
+  status             String       @default("DRAFT") // DRAFT | REGISTRATION | IN_PROGRESS | COMPLETED
+  registrationOpen   Boolean      @default(false)
+  isPublic           Boolean      @default(true)
+  seeding            String       @default("RANDOM") // RANDOM | MANUAL
+  groupCount         Int?
+  qualifiersPerGroup Int?
+  grandFinalReset    Boolean      @default(true)
+  // Auto-pilot: assign the next ready match whenever a table frees up.
+  autoAssignTables   Boolean      @default(false)
+  createdAt          DateTime     @default(now())
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  venue              Venue?       @relation(fields: [venueId], references: [id], onDelete: SetNull)
+  entries            Entry[]
+  groups             Group[]
+  matches            Match[]
+
+  @@index([organizationId, startsAt])
+}
+
+model Entry {
+  id           String     @id @default(cuid())
+  tournamentId String
+  playerId     String
+  seed         Int?
+  status       String     @default("CONFIRMED") // REGISTERED | CONFIRMED | WITHDRAWN
+  groupId      String?
+  finalRank    Int?
+  createdAt    DateTime   @default(now())
+  tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  player       Player     @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  group        Group?     @relation(fields: [groupId], references: [id], onDelete: SetNull)
+
+  @@unique([tournamentId, playerId])
+}
+
+model Group {
+  id           String     @id @default(cuid())
+  tournamentId String
+  name         String
+  index        Int
+  tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  entries      Entry[]
+  matches      Match[]
+}
+
+model Match {
+  id           String     @id @default(cuid())
+  tournamentId String
+  // WINNERS (also used for single elim) | LOSERS | FINAL | GROUP
+  bracket      String
+  round        Int
+  position     Int
+  code         String // human label, e.g. "W1-3", "L2-1", "GF", "A-4"
+  groupId      String?
+  raceTo       Int
+  entry1Id     String?
+  entry2Id     String?
+  score1       Int        @default(0)
+  score2       Int        @default(0)
+  winnerId     String?
+  // PENDING (waiting for players) | READY | LIVE | COMPLETED | VOID (bye / unused reset)
+  status       String     @default("PENDING")
+  // A bye match: one side will never be filled, so whoever arrives advances.
+  isBye        Boolean    @default(false)
+  // Where the winner / loser goes next. Slot is 1 or 2.
+  winnerToId   String?
+  winnerToSlot Int?
+  loserToId    String?
+  loserToSlot  Int?
+  tableId      String?
+  startedAt    DateTime?
+  breakSlot    Int? // who broke first (1 or 2)
+  completedAt  DateTime?
+  updatedAt    DateTime   @updatedAt
+  tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  group        Group?     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  table        Table?     @relation(fields: [tableId], references: [id], onDelete: SetNull)
+  frames       Frame[]
+
+  @@index([tournamentId, bracket, round, position])
+}
+
+// One record per rack/frame won, so scores have history and can be undone.
+model Frame {
+  id          String   @id @default(cuid())
+  matchId     String
+  number      Int
+  winner      Int // 1 or 2
+  breakAndRun Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  match       Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  @@unique([matchId, number])
+}
+
+// A tablet paired to a table. It can only score matches assigned to that table.
+// Deleting the row revokes it: its cookie stops working on the next request.
+model Device {
+  id             String       @id @default(cuid())
+  organizationId String
+  tableId        String
+  name           String
+  createdAt      DateTime     @default(now())
+  lastSeenAt     DateTime?
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  table          Table        @relation(fields: [tableId], references: [id], onDelete: Cascade)
+
+  @@index([tableId])
+}

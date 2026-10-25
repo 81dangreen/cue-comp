@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-5 -5 46 46">
+  <clipPath id="r"><rect x="-5" y="-5" width="46" height="46" rx="11"/></clipPath>
+  <g clip-path="url(#r)">
+    <rect x="-5" y="-5" width="46" height="46" fill="#0c3a2c"/>
+    <polygon points="-8.114,-4.851 15.138,16.506 16.187,15.424 -5.886,-7.149" fill="#d9a35b"/>
+    <polygon points="15.138,16.506 16.022,17.318 17.026,16.282 16.187,15.424" fill="#f3efe6"/>
+    <polygon points="16.022,17.318 16.611,17.86 17.586,16.854 17.026,16.282" fill="#3b82f6"/>
+    <circle cx="25.5" cy="25.5" r="8.5" fill="#ffffff"/>
+    <g transform="rotate(-25 25.5 25.5)">
+      <path d="M18 21.5 L33 21.5 A8.5 8.5 0 0 1 33 29.5 L18 29.5 A8.5 8.5 0 0 1 18 21.5 Z" fill="#f5c518"/>
+      <circle cx="24.5" cy="25.5" r="2.5" fill="#ffffff"/>
+    </g>
+  </g>
+</svg>
