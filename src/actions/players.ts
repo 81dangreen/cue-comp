@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
+import { DISCIPLINES } from "@/lib/constants";
 import type { ActionResult } from "@/components/forms";
 import { formObject, run } from "./util";
 
@@ -67,5 +68,54 @@ export async function importPlayers(_prev: ActionResult, formData: FormData) {
       data: players.map((p) => ({ ...p, organizationId: user.organizationId })),
     });
     return `Imported ${players.length} players`;
+  });
+}
+
+const MAX_RANK = 999;
+
+/** Validate a rank box: blank clears the rank, otherwise a whole number from 1. */
+function parseRank(raw: string | undefined, label: string): number | null {
+  const value = raw?.trim();
+  if (!value) return null;
+  const rank = Number(value);
+  if (!Number.isInteger(rank) || rank < 1 || rank > MAX_RANK) throw new Error(`${label}: rank must be a whole number from 1`);
+  return rank;
+}
+
+async function setRank(playerId: string, discipline: string, rank: number | null) {
+  if (rank === null) {
+    await db.playerRank.deleteMany({ where: { playerId, discipline } });
+  } else {
+    await db.playerRank.upsert({
+      where: { playerId_discipline: { playerId, discipline } },
+      create: { playerId, discipline, rank },
+      update: { rank },
+    });
+  }
+}
+
+/** One player's ranks across all disciplines (boxes named "rank-<DISCIPLINE>"). */
+export async function savePlayerRanks(playerId: string, _prev: ActionResult, formData: FormData) {
+  return run(async () => {
+    const user = await requireUser("ADMIN");
+    const player = await db.player.findFirst({ where: { id: playerId, organizationId: user.organizationId } });
+    if (!player) throw new Error("Player not found");
+    const ranks = Object.entries(DISCIPLINES).map(
+      ([key, label]) => [key, parseRank(formData.get(`rank-${key}`)?.toString(), label)] as const,
+    );
+    for (const [discipline, rank] of ranks) await setRank(playerId, discipline, rank);
+    return "Ranks saved";
+  });
+}
+
+/** Every player's rank in one discipline (boxes named "rank-<playerId>"). */
+export async function saveDisciplineRanks(discipline: string, _prev: ActionResult, formData: FormData) {
+  return run(async () => {
+    const user = await requireUser("ADMIN");
+    if (!(discipline in DISCIPLINES)) throw new Error("Unknown discipline");
+    const players = await db.player.findMany({ where: { organizationId: user.organizationId } });
+    const ranks = players.map((p) => [p.id, parseRank(formData.get(`rank-${p.id}`)?.toString(), `${p.firstName} ${p.lastName}`)] as const);
+    for (const [playerId, rank] of ranks) await setRank(playerId, discipline, rank);
+    return `Saved ${ranks.filter(([, r]) => r !== null).length} ranks`;
   });
 }

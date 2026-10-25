@@ -90,18 +90,24 @@ export function Field({ label, hint, children }: { label: string; hint?: string;
 }
 
 const inputBase =
-  "w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-[15px] text-foreground outline-none focus:border-accent focus:ring-2 focus:ring-accent/20";
+  "rounded-lg border border-border bg-surface px-3 py-2.5 text-[15px] text-foreground outline-none focus:border-accent focus:ring-2 focus:ring-accent/20";
+
+/** Inputs are full width unless the caller sets a width (e.g. "w-16"), which would otherwise lose to w-full. */
+function fieldClasses(className?: string) {
+  const sized = className?.split(/\s+/).some((c) => /^w-/.test(c) || c === "flex-1");
+  return cx(inputBase, !sized && "w-full", className);
+}
 
 export function Input({ className, ...props }: ComponentProps<"input">) {
-  return <input className={cx(inputBase, className)} {...props} />;
+  return <input className={fieldClasses(className)} {...props} />;
 }
 
 export function Select({ className, ...props }: ComponentProps<"select">) {
-  return <select className={cx(inputBase, className)} {...props} />;
+  return <select className={fieldClasses(className)} {...props} />;
 }
 
 export function Textarea({ className, ...props }: ComponentProps<"textarea">) {
-  return <textarea className={cx(inputBase, "min-h-24", className)} {...props} />;
+  return <textarea className={fieldClasses(cx("min-h-24", className))} {...props} />;
 }
 
 export function EmptyState({ title, children }: { title: string; children?: ReactNode }) {

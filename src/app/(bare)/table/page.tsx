@@ -5,6 +5,8 @@ import { APP_NAME } from "@/lib/brand";
 import { roundLabel } from "@/lib/bracket";
 import { db } from "@/lib/db";
 import { getDevice } from "@/lib/device";
+import { describeHandicap } from "@/lib/handicap";
+import { matchHandicap } from "@/lib/tournament-service";
 import { playerName } from "@/lib/queries";
 import { ConfirmButton } from "@/components/forms";
 import { LiveRefresher } from "@/components/live-refresher";
@@ -57,7 +59,10 @@ async function TableScreen({ searchParams }: { searchParams: PageProps<"/table">
     }),
   ]);
   const names = await entryNameMap([current?.entry1Id, current?.entry2Id, last?.entry1Id, last?.entry2Id]);
-  const name = (id: string | null | undefined) => (id && names.get(id)) || "TBD";
+  const name = (id: string | null | undefined) => (id && names.get(id)?.name) || "TBD";
+  const rank = (id: string | null | undefined) => (current?.tournament.handicapStyle && id ? names.get(id)?.rank : null);
+  const handicap = current ? await matchHandicap(current) : null;
+  const handicapNote = current && handicap ? describeHandicap(handicap, name(current.entry1Id), name(current.entry2Id)) : null;
 
   const chrome = (
     <>
@@ -82,6 +87,13 @@ async function TableScreen({ searchParams }: { searchParams: PageProps<"/table">
           score2={current.score2}
           winnerSlot={null}
           breakSlot={current.breakSlot}
+          target1={handicap?.target1}
+          target2={handicap?.target2}
+          handicap1={handicap?.handicap1}
+          handicap2={handicap?.handicap2}
+          rank1={rank(current.entry1Id)}
+          rank2={rank(current.entry2Id)}
+          handicapNote={handicapNote}
           canUndo={current.frames.length > 0}
           frames={current.frames.map((f) => ({ winner: f.winner, breakAndRun: f.breakAndRun }))}
           confirmFinish
@@ -116,11 +128,16 @@ async function TableScreen({ searchParams }: { searchParams: PageProps<"/table">
             <p className="mt-2 text-lg text-white/75">
               {current.tournament.name} · {await matchRoundName(current)} · Race to {current.raceTo}
             </p>
+            {handicapNote && (
+              <p className="mx-auto mt-4 w-fit rounded-xl bg-amber-300/15 px-4 py-2 text-lg font-semibold text-amber-100">
+                Handicap: {handicapNote}
+              </p>
+            )}
           </div>
           <div className="flex flex-col items-center gap-3 sm:flex-row sm:gap-8">
-            <span className="text-4xl font-bold sm:text-6xl">{name(current.entry1Id)}</span>
+            <PlayerHeading name={name(current.entry1Id)} rank={rank(current.entry1Id)} />
             <span className="text-2xl font-semibold text-white/50">v</span>
-            <span className="text-4xl font-bold sm:text-6xl">{name(current.entry2Id)}</span>
+            <PlayerHeading name={name(current.entry2Id)} rank={rank(current.entry2Id)} />
           </div>
           <StartMatch matchId={current.id} player1={name(current.entry1Id)} player2={name(current.entry2Id)} />
         </div>
@@ -183,11 +200,20 @@ function PairScreen({ code }: { code?: string }) {
   );
 }
 
+function PlayerHeading({ name, rank }: { name: string; rank: number | null | undefined }) {
+  return (
+    <span className="flex items-center gap-3">
+      <span className="text-4xl font-bold sm:text-6xl">{name}</span>
+      {rank && <span className="rounded-lg bg-white/15 px-2.5 py-1 text-xl font-bold text-white/85">R{rank}</span>}
+    </span>
+  );
+}
+
 async function entryNameMap(ids: (string | null | undefined)[]) {
   const wanted = ids.filter((id): id is string => !!id);
-  if (!wanted.length) return new Map<string, string>();
+  if (!wanted.length) return new Map<string, { name: string; rank: number | null }>();
   const entries = await db.entry.findMany({ where: { id: { in: wanted } }, include: { player: true } });
-  return new Map(entries.map((e) => [e.id, playerName(e.player)]));
+  return new Map(entries.map((e) => [e.id, { name: playerName(e.player), rank: e.rank }]));
 }
 
 async function matchRoundName(m: {

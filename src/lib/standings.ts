@@ -7,6 +7,9 @@ export interface StandingMatch {
   score2: number;
   winnerId: string | null;
   status: string;
+  /** Handicap starts are part of the score but weren't won at the table, so they don't count as frames. */
+  handicap1?: number;
+  handicap2?: number;
 }
 
 export interface StandingRow {
@@ -34,10 +37,12 @@ export function computeStandings(entryIds: string[], matches: StandingMatch[]): 
     if (!a || !b) continue;
     a.played++;
     b.played++;
-    a.framesFor += m.score1;
-    a.framesAgainst += m.score2;
-    b.framesFor += m.score2;
-    b.framesAgainst += m.score1;
+    const won1 = m.score1 - (m.handicap1 ?? 0);
+    const won2 = m.score2 - (m.handicap2 ?? 0);
+    a.framesFor += won1;
+    a.framesAgainst += won2;
+    b.framesFor += won2;
+    b.framesAgainst += won1;
     if (m.winnerId === a.entryId) {
       a.won++;
       b.lost++;

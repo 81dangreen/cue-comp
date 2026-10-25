@@ -14,6 +14,7 @@ import {
   singleElimination,
 } from "./bracket";
 import { completeMatch, EngineError, EngineMatch, reopenMatch } from "./engine-core";
+import { computeHandicap, type MatchHandicap } from "./handicap";
 import { computeStandings } from "./standings";
 
 type Tx = Prisma.TransactionClient;
@@ -65,6 +66,62 @@ async function tournamentTableIds(tournamentId: string) {
   return rows.map((r) => r.tableId);
 }
 
+/** Race target for each side: the handicap target if one was set when the match started, else the race. */
+export function matchTargets(m: { raceTo: number; target1: number | null; target2: number | null }) {
+  return { target1: m.target1 ?? m.raceTo, target2: m.target2 ?? m.raceTo };
+}
+
+/** The handicap this match gets from its tournament settings and the two entries' ranks. */
+async function handicapFor(
+  tx: Tx | typeof db,
+  m: { tournamentId: string; raceTo: number; entry1Id: string | null; entry2Id: string | null },
+): Promise<MatchHandicap> {
+  const t = await tx.tournament.findUniqueOrThrow({
+    where: { id: m.tournamentId },
+    select: { handicapStyle: true, handicapStarts: true },
+  });
+  const entries = t.handicapStyle
+    ? await tx.entry.findMany({ where: { id: { in: [m.entry1Id, m.entry2Id].filter((x): x is string => !!x) } } })
+    : [];
+  const rank = (id: string | null) => entries.find((e) => e.id === id)?.rank;
+  return computeHandicap({
+    style: t.handicapStyle,
+    starts: t.handicapStarts,
+    raceTo: m.raceTo,
+    rank1: rank(m.entry1Id),
+    rank2: rank(m.entry2Id),
+  });
+}
+
+/**
+ * A match's handicap for display: the one fixed when it started, or for a match that
+ * hasn't started yet, the one it will get.
+ */
+export async function matchHandicap(m: {
+  status: string;
+  tournamentId: string;
+  raceTo: number;
+  entry1Id: string | null;
+  entry2Id: string | null;
+  handicap1: number;
+  handicap2: number;
+  target1: number | null;
+  target2: number | null;
+}): Promise<MatchHandicap> {
+  if (m.status === "LIVE" || m.status === "COMPLETED") return { handicap1: m.handicap1, handicap2: m.handicap2, ...matchTargets(m) };
+  return handicapFor(db, m);
+}
+
+/** Columns that fix a handicap onto a match as it starts. */
+function handicapColumns(h: MatchHandicap, raceTo: number) {
+  return {
+    handicap1: h.handicap1,
+    handicap2: h.handicap2,
+    target1: h.target1 === raceTo ? null : h.target1,
+    target2: h.target2 === raceTo ? null : h.target2,
+  };
+}
+
 /** Auto-pilot: if enabled, fill free tables with the next ready matches. */
 async function autoPilot(tournamentId: string) {
   const t = await db.tournament.findUnique({ where: { id: tournamentId }, select: { autoAssignTables: true, status: true, venueId: true } });
@@ -106,6 +163,18 @@ function seededEntryIds(entries: { id: string; seed: number | null }[], seeding:
   return [...seeded, ...unseeded].map((e) => e.id);
 }
 
+/** Copy each entry's current rank in the tournament's discipline, unless the organiser already set one. */
+async function freezeRanks(tx: Tx, tournamentId: string, discipline: string) {
+  const entries = await tx.entry.findMany({
+    where: { tournamentId, rank: null },
+    include: { player: { include: { ranks: { where: { discipline } } } } },
+  });
+  for (const e of entries) {
+    const rank = e.player.ranks[0]?.rank;
+    if (rank) await tx.entry.update({ where: { id: e.id }, data: { rank } });
+  }
+}
+
 /** Build the draw (bracket or groups). Replaces any existing draw that hasn't started. */
 export async function generateDraw(tournamentId: string) {
   const previousTables = await tournamentTableIds(tournamentId);
@@ -122,6 +191,7 @@ export async function generateDraw(tournamentId: string) {
 
     await tx.match.deleteMany({ where: { tournamentId } });
     await tx.entry.updateMany({ where: { tournamentId }, data: { groupId: null } });
+    await freezeRanks(tx, tournamentId, t.discipline);
     await tx.group.deleteMany({ where: { tournamentId } });
 
     const order = seededEntryIds(t.entries, t.seeding);
@@ -233,18 +303,22 @@ export async function addFrame(matchId: string, slot: 1 | 2, breakAndRun = false
     if (m.status !== "READY" && m.status !== "LIVE") throw new ServiceError("This match can't be scored right now");
     if (!m.entry1Id || !m.entry2Id) throw new ServiceError("Both players must be known");
 
+    // Scoring the first rack of a ready match starts it, which fixes its handicap.
+    const start = m.status === "READY" ? handicapColumns(await handicapFor(tx, m), m.raceTo) : null;
+    const { target1, target2 } = matchTargets(start ? { ...start, raceTo: m.raceTo } : m);
+
     await tx.frame.create({ data: { matchId, number: m._count.frames + 1, winner: slot, breakAndRun } });
-    const score1 = m.score1 + (slot === 1 ? 1 : 0);
-    const score2 = m.score2 + (slot === 2 ? 1 : 0);
+    const score1 = (start ? start.handicap1 : m.score1) + (slot === 1 ? 1 : 0);
+    const score2 = (start ? start.handicap2 : m.score2) + (slot === 2 ? 1 : 0);
     await tx.match.update({
       where: { id: matchId },
-      data: { score1, score2, status: "LIVE", startedAt: m.startedAt ?? new Date() },
+      data: { ...(start ?? {}), score1, score2, status: "LIVE", startedAt: m.startedAt ?? new Date() },
     });
 
-    const finished = score1 >= m.raceTo || score2 >= m.raceTo;
+    const finished = score1 >= target1 || score2 >= target2;
     if (finished) {
       const matches = await loadEngine(tx, m.tournamentId);
-      const changed = wrapEngine(() => completeMatch(matches, matchId, score1 >= m.raceTo ? 1 : 2));
+      const changed = wrapEngine(() => completeMatch(matches, matchId, score1 >= target1 ? 1 : 2));
       await persist(tx, matches, changed);
       await refreshTournamentStatus(tx, m.tournamentId);
     }
@@ -256,9 +330,16 @@ export async function addFrame(matchId: string, slot: 1 | 2, breakAndRun = false
 
 /** Mark a ready match as started, recording who breaks first. */
 export async function startMatch(matchId: string, breakSlot?: 1 | 2) {
-  const m = await db.match.findUniqueOrThrow({ where: { id: matchId } });
-  if (m.status !== "READY") throw new ServiceError("This match isn't ready to start");
-  await db.match.update({ where: { id: matchId }, data: { status: "LIVE", startedAt: new Date(), breakSlot } });
+  const m = await db.$transaction(async (tx) => {
+    const m = await tx.match.findUniqueOrThrow({ where: { id: matchId } });
+    if (m.status !== "READY") throw new ServiceError("This match isn't ready to start");
+    const start = handicapColumns(await handicapFor(tx, m), m.raceTo);
+    await tx.match.update({
+      where: { id: matchId },
+      data: { ...start, score1: start.handicap1, score2: start.handicap2, status: "LIVE", startedAt: new Date(), breakSlot },
+    });
+    return m;
+  });
   publish(m.tournamentId, [m.tableId]);
 }
 
@@ -294,10 +375,18 @@ export async function setResult(matchId: string, score1: number, score2: number)
   const match = await db.$transaction(async (tx) => {
     const m = await tx.match.findUniqueOrThrow({ where: { id: matchId } });
     if (!m.entry1Id || !m.entry2Id) throw new ServiceError("Both players must be known");
-    if (score1 === score2) throw new ServiceError("A match can't end level");
-    if (Math.max(score1, score2) !== m.raceTo || Math.min(score1, score2) < 0) {
-      throw new ServiceError(`The winner must reach ${m.raceTo}`);
+    // A match entered without being played still gets its handicap.
+    const start = m.status === "READY" || m.status === "PENDING" ? handicapColumns(await handicapFor(tx, m), m.raceTo) : null;
+    const h = start ?? m;
+    const { target1, target2 } = matchTargets(start ? { ...start, raceTo: m.raceTo } : m);
+    const won1 = score1 === target1 && score2 < target2;
+    const won2 = score2 === target2 && score1 < target1;
+    if (!won1 && !won2) {
+      throw new ServiceError(
+        target1 === target2 ? `The winner must reach ${target1}` : `Player 1 needs ${target1} or player 2 needs ${target2} to win`,
+      );
     }
+    if (score1 < h.handicap1 || score2 < h.handicap2) throw new ServiceError("A score can't be below the player's start");
     const matches = await loadEngine(tx, m.tournamentId);
     if (m.status === "COMPLETED") {
       const changed = wrapEngine(() => reopenMatch(matches, matchId));
@@ -306,13 +395,13 @@ export async function setResult(matchId: string, score1: number, score2: number)
     await tx.frame.deleteMany({ where: { matchId } });
     await tx.match.update({
       where: { id: matchId },
-      data: { score1, score2, status: "LIVE", startedAt: m.startedAt ?? new Date() },
+      data: { ...(start ?? {}), score1, score2, status: "LIVE", startedAt: m.startedAt ?? new Date() },
     });
     const fresh = matches.get(matchId)!;
     fresh.score1 = score1;
     fresh.score2 = score2;
     fresh.status = "LIVE";
-    const changed = wrapEngine(() => completeMatch(matches, matchId, score1 > score2 ? 1 : 2));
+    const changed = wrapEngine(() => completeMatch(matches, matchId, won1 ? 1 : 2));
     await persist(tx, matches, changed);
     await refreshTournamentStatus(tx, m.tournamentId);
     return m;

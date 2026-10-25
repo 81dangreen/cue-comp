@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { addEntries, confirmEntry, removeEntry, saveSeeds } from "@/actions/tournaments";
+import { addEntries, confirmEntry, removeEntry, saveEntries } from "@/actions/tournaments";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getTournamentFull, playerName } from "@/lib/queries";
@@ -30,26 +30,43 @@ async function Entries({ params }: { params: PageProps<"/admin/tournaments/[id]/
     (a, b) => (a.seed ?? 999) - (b.seed ?? 999) || playerName(a.player).localeCompare(playerName(b.player)),
   );
   const manual = t.seeding === "MANUAL";
+  const handicapped = !!t.handicapStyle;
+  // Before the draw, entries without a rank show the player's current rank for this discipline.
+  const playerRanks = handicapped
+    ? new Map(
+        (
+          await db.playerRank.findMany({
+            where: { playerId: { in: t.entries.map((e) => e.playerId) }, discipline: t.discipline },
+          })
+        ).map((r) => [r.playerId, r.rank]),
+      )
+    : new Map<string, number>();
+  const showSave = (manual && !locked) || handicapped;
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
       <Card>
         <CardHeader
           title={`Entries (${t.entries.length}${t.maxEntries ? ` / ${t.maxEntries}` : ""})`}
-          subtitle={locked ? "The draw has been made — reset it to change entries." : manual ? "Manual seeding: enter seeds then save." : undefined}
+          subtitle={[
+            locked ? "The draw has been made — reset it to change entries." : manual ? "Manual seeding: enter seeds then save." : null,
+            handicapped ? "Handicap ranks (1 = strongest) apply to matches that haven't started yet." : null,
+          ]
+            .filter(Boolean)
+            .join(" ")}
         />
         {entries.length === 0 ? (
           <EmptyState title="No players entered yet" />
         ) : (
           <>
-            {/* Seed inputs belong to the form below via the `form` attribute, so the
+            {/* Seed and rank inputs belong to the form below via the `form` attribute, so the
                 per-row Confirm/Remove buttons can have their own forms without nesting. */}
             <ul className="divide-y divide-border">
               {entries.map((e) => (
                 <li key={e.id} className="flex items-center gap-3 px-5 py-2.5">
                   {manual && (
                     <Input
-                      form="seeds-form"
+                      form="entries-form"
                       name={`seed-${e.id}`}
                       type="number"
                       min={1}
@@ -61,6 +78,20 @@ async function Entries({ params }: { params: PageProps<"/admin/tournaments/[id]/
                     />
                   )}
                   <span className="flex-1 font-medium">{playerName(e.player)}</span>
+                  {handicapped && (
+                    <label className="flex items-center gap-1.5 text-xs text-muted">
+                      Rank
+                      <Input
+                        form="entries-form"
+                        name={`rank-${e.id}`}
+                        type="number"
+                        min={1}
+                        defaultValue={e.rank ?? playerRanks.get(e.playerId) ?? ""}
+                        className="w-16 py-1 text-center"
+                        placeholder="–"
+                      />
+                    </label>
+                  )}
                   {e.status === "REGISTERED" && <Badge tone="warn">Self-registered</Badge>}
                   {!locked && e.status === "REGISTERED" && (
                     <ActionButton action={confirmEntry.bind(null, t.id, e.id)} variant="secondary" className="px-2.5 py-1 text-xs">
@@ -75,9 +106,9 @@ async function Entries({ params }: { params: PageProps<"/admin/tournaments/[id]/
                 </li>
               ))}
             </ul>
-            {manual && !locked && (
-              <ActionForm id="seeds-form" action={saveSeeds.bind(null, t.id)} className="border-t border-border p-4">
-                <SubmitButton variant="secondary">Save seeds</SubmitButton>
+            {showSave && (
+              <ActionForm id="entries-form" action={saveEntries.bind(null, t.id)} className="border-t border-border p-4">
+                <SubmitButton variant="secondary">{handicapped ? (manual && !locked ? "Save seeds & ranks" : "Save ranks") : "Save seeds"}</SubmitButton>
               </ActionForm>
             )}
           </>

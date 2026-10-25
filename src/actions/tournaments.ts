@@ -6,6 +6,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireTournament, requireUser } from "@/lib/auth";
 import { DISCIPLINES, FORMATS } from "@/lib/constants";
+import { HANDICAP_STYLES, parseStartTable, type HandicapStyle } from "@/lib/handicap";
 import { publish } from "@/lib/events";
 import {
   autoAssignTables,
@@ -15,6 +16,12 @@ import {
 } from "@/lib/tournament-service";
 import type { ActionResult } from "@/components/forms";
 import { formObject, optionalInt, run, slugify } from "./util";
+
+/** Handicap style and start table from the settings form. A style with no starts is treated as level play. */
+function handicapSettings(style: HandicapStyle | undefined, fields: Record<string, string>) {
+  const starts = style ? parseStartTable((key) => fields[key]) : [];
+  return starts.length ? { handicapStyle: style!, handicapStarts: starts } : { handicapStyle: null, handicapStarts: [] };
+}
 
 const tournamentSchema = z
   .object({
@@ -33,6 +40,7 @@ const tournamentSchema = z
     qualifiersPerGroup: z.coerce.number().int().min(1).max(8).optional(),
     grandFinalReset: z.string().optional(),
     isPublic: z.string().optional(),
+    handicapStyle: z.enum(Object.keys(HANDICAP_STYLES) as [HandicapStyle]).optional(),
   })
   .transform((d) => ({
     ...d,
@@ -49,9 +57,16 @@ async function checkVenue(organizationId: string, venueId?: string) {
 
 export async function createTournament(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireUser("ADMIN");
-  const parsed = tournamentSchema.safeParse(formObject(formData));
+  const fields = formObject(formData);
+  const parsed = tournamentSchema.safeParse(fields);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
-  const data = parsed.data;
+  let handicap;
+  try {
+    handicap = handicapSettings(parsed.data.handicapStyle, fields);
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+  const data = { ...parsed.data, ...handicap };
   const venueId = await checkVenue(user.organizationId, data.venueId);
   const slug = `${slugify(data.name) || "tournament"}-${randomBytes(3).toString("hex")}`;
   const t = await db.tournament.create({
@@ -63,11 +78,16 @@ export async function createTournament(_prev: ActionResult, formData: FormData):
 export async function updateTournament(tournamentId: string, _prev: ActionResult, formData: FormData) {
   return run(async () => {
     const { user, tournament } = await requireTournament(tournamentId);
-    const data = tournamentSchema.parse(formObject(formData));
+    const fields = formObject(formData);
+    const parsed = tournamentSchema.parse(fields);
+    const data = { ...parsed, ...handicapSettings(parsed.handicapStyle, fields) };
     const hasDraw = (await db.match.count({ where: { tournamentId } })) > 0;
     if (hasDraw && (data.format !== tournament.format || data.raceTo !== tournament.raceTo)) {
       throw new Error("Reset the draw before changing the format or race length");
     }
+    const sameHandicap =
+      data.handicapStyle === tournament.handicapStyle && data.handicapStarts.join() === tournament.handicapStarts.join();
+    if (hasDraw && !sameHandicap) throw new Error("Reset the draw before changing the handicap");
     const venueId = await checkVenue(user.organizationId, data.venueId);
     await db.tournament.update({
       where: { id: tournamentId },
@@ -168,11 +188,26 @@ export async function confirmEntry(tournamentId: string, entryId: string) {
   });
 }
 
-export async function saveSeeds(tournamentId: string, _prev: ActionResult, formData: FormData) {
+/**
+ * Save the entries table: seeds (manual seeding, before the draw) and handicap ranks.
+ * Ranks can still be corrected after the draw; they apply to matches that haven't started.
+ */
+export async function saveEntries(tournamentId: string, _prev: ActionResult, formData: FormData) {
   return run(async () => {
-    await requireTournament(tournamentId);
-    await assertDrawNotMade(tournamentId);
+    const { tournament } = await requireTournament(tournamentId);
     const entries = await db.entry.findMany({ where: { tournamentId } });
+    const drawMade = (await db.match.count({ where: { tournamentId } })) > 0;
+
+    if (tournament.handicapStyle) {
+      for (const e of entries) {
+        const raw = String(formData.get(`rank-${e.id}`) ?? "").trim();
+        const rank = raw ? Number(raw) : null;
+        if (rank !== null && (!Number.isInteger(rank) || rank < 1)) throw new Error("Ranks must be whole numbers from 1");
+        await db.entry.update({ where: { id: e.id }, data: { rank } });
+      }
+    }
+    if (tournament.seeding !== "MANUAL" || drawMade) return "Saved";
+
     const seen = new Set<number>();
     for (const e of entries) {
       const raw = String(formData.get(`seed-${e.id}`) ?? "").trim();
@@ -184,7 +219,7 @@ export async function saveSeeds(tournamentId: string, _prev: ActionResult, formD
       }
       await db.entry.update({ where: { id: e.id }, data: { seed } });
     }
-    return "Seeds saved";
+    return "Saved";
   });
 }
 

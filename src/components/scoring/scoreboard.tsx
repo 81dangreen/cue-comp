@@ -19,6 +19,15 @@ type Props = {
   score2: number;
   winnerSlot: 1 | 2 | null;
   breakSlot?: number | null;
+  /** Handicap: each side's race target (defaults to raceTo), starting score and rank. */
+  target1?: number;
+  target2?: number;
+  handicap1?: number;
+  handicap2?: number;
+  rank1?: number | null;
+  rank2?: number | null;
+  /** e.g. "Sam starts 1 up"; shown under the header. */
+  handicapNote?: string | null;
   canUndo: boolean;
   frames: { winner: number; breakAndRun: boolean }[];
   /** Ask before saving the rack that wins the match (players score their own matches on tablets). */
@@ -47,6 +56,8 @@ export function Scoreboard(props: Props) {
   const finished = props.status === "COMPLETED";
   const scorable = props.status === "READY" || props.status === "LIVE";
   const name = (slot: 1 | 2) => (slot === 1 ? props.player1 : props.player2);
+  const target = (slot: 1 | 2) => (slot === 1 ? props.target1 : props.target2) ?? props.raceTo;
+  const evenRace = target(1) === target(2);
 
   function send(slot: 1 | 2, breakAndRun: boolean) {
     setError(null);
@@ -60,7 +71,7 @@ export function Scoreboard(props: Props) {
   function scoreRack(slot: 1 | 2, breakAndRun = false) {
     if (!scorable || pending) return;
     const next = (slot === 1 ? score.s1 : score.s2) + 1;
-    if (props.confirmFinish && next >= props.raceTo) {
+    if (props.confirmFinish && next >= target(slot)) {
       setFinishing({ slot, breakAndRun });
       return;
     }
@@ -82,7 +93,9 @@ export function Scoreboard(props: Props) {
     const value = slot === 1 ? score.s1 : score.s2;
     const won = finished && props.winnerSlot === slot;
     const lost = finished && props.winnerSlot !== slot;
-    const hill = !finished && value === props.raceTo - 1;
+    const hill = !finished && value === target(slot) - 1;
+    const start = (slot === 1 ? props.handicap1 : props.handicap2) ?? 0;
+    const rank = slot === 1 ? props.rank1 : props.rank2;
     return (
       <div className={cx("relative flex flex-1 flex-col", lost && "opacity-40")}>
         <button
@@ -99,7 +112,16 @@ export function Scoreboard(props: Props) {
           <span className="flex max-w-full items-center gap-2">
             <span className={cx("h-3 w-3 shrink-0 rounded-full", slot === 1 ? "bg-sky-300" : "bg-amber-300")} />
             <span className="truncate text-2xl font-semibold sm:text-4xl">{name(slot)}</span>
+            {rank && <span className="rounded-md bg-white/15 px-2 py-0.5 text-sm font-bold text-white/85">R{rank}</span>}
           </span>
+          {(!evenRace || start !== 0) && (
+            <span className="text-sm font-medium text-white/70">
+              {!evenRace && <>Race to {target(slot)}</>}
+              {!evenRace && start !== 0 && " · "}
+              {start > 0 && <>Started {start} up</>}
+              {start < 0 && <>Started on {start}</>}
+            </span>
+          )}
           <span className="text-[8rem] leading-none font-black tabular-nums drop-shadow-lg sm:text-[13rem]">{value}</span>
           <span className="flex h-7 items-center gap-2">
             {props.breakSlot === slot && !finished && (
@@ -143,9 +165,20 @@ export function Scoreboard(props: Props) {
         </div>
         <div className="text-right whitespace-nowrap">
           {props.backHref && props.tableName && <span className="mr-2">{props.tableName}</span>}
-          Race to <span className="text-lg font-bold text-white">{props.raceTo}</span>
+          {evenRace ? (
+            <>
+              Race to <span className="text-lg font-bold text-white">{target(1)}</span>
+            </>
+          ) : (
+            <span className="font-semibold text-white">Handicap race</span>
+          )}
         </div>
       </header>
+      {props.handicapNote && (
+        <div className="mb-3 rounded-xl bg-amber-300/15 px-4 py-2 text-center text-sm font-semibold text-amber-100">
+          Handicap: {props.handicapNote}
+        </div>
+      )}
 
       <div className="flex flex-1 flex-col gap-3 sm:flex-row">
         {panel(1)}

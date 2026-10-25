@@ -32,3 +32,14 @@ describe("computeStandings", () => {
     expect(rows.every((r) => r.played === 0)).toBe(true);
   });
 });
+
+describe("handicap starts", () => {
+  it("don't count as frames won", () => {
+    const rows = computeStandings(
+      ["a", "b"],
+      [{ entry1Id: "a", entry2Id: "b", score1: 3, score2: 2, handicap1: 0, handicap2: 1, winnerId: "a", status: "COMPLETED" }],
+    );
+    const a = rows.find((r) => r.entryId === "a")!;
+    expect([a.framesFor, a.framesAgainst, a.frameDiff]).toEqual([3, 1, 2]);
+  });
+});

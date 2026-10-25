@@ -54,12 +54,15 @@ async function Player({ params }: { params: PageProps<"/players/[id]">["params"]
     const mine = entryIds.includes(m.entry1Id!) ? 1 : 2;
     const myScore = mine === 1 ? m.score1 : m.score2;
     const theirScore = mine === 1 ? m.score2 : m.score1;
+    // Racks actually won, without handicap starts.
+    const myRacks = myScore - (mine === 1 ? m.handicap1 : m.handicap2);
+    const theirRacks = theirScore - (mine === 1 ? m.handicap2 : m.handicap1);
     const isWin = m.winnerId === (mine === 1 ? m.entry1Id : m.entry2Id);
-    return { m, myScore, theirScore, isWin, opponent: opponentName.get(mine === 1 ? m.entry2Id! : m.entry1Id!) };
+    return { m, myScore, theirScore, myRacks, theirRacks, isWin, opponent: opponentName.get(mine === 1 ? m.entry2Id! : m.entry1Id!) };
   });
   const won = rows.filter((r) => r.isWin).length;
-  const framesFor = rows.reduce((sum, r) => sum + r.myScore, 0);
-  const framesAgainst = rows.reduce((sum, r) => sum + r.theirScore, 0);
+  const framesFor = rows.reduce((sum, r) => sum + r.myRacks, 0);
+  const framesAgainst = rows.reduce((sum, r) => sum + r.theirRacks, 0);
   const winPct = matches.length ? Math.round((won / matches.length) * 100) : 0;
 
   return (

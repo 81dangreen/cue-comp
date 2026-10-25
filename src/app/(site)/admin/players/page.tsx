@@ -6,7 +6,7 @@ import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { playerName } from "@/lib/queries";
 import { ActionForm, SubmitButton } from "@/components/forms";
-import { Card, CardHeader, EmptyState, Field, Input, PageHeader, PageSkeleton, Textarea } from "@/components/ui";
+import { ButtonLink, Card, CardHeader, EmptyState, Field, Input, PageHeader, PageSkeleton, Textarea } from "@/components/ui";
 
 export const metadata: Metadata = { title: "Players" };
 
@@ -35,7 +35,15 @@ async function Players({ searchParams }: { searchParams: PageProps<"/admin/playe
 
   return (
     <div>
-      <PageHeader title="Players" subtitle={`${players.length} ${query ? "matching" : "in your database"}`} />
+      <PageHeader
+        title="Players"
+        subtitle={`${players.length} ${query ? "matching" : "in your database"}`}
+        actions={
+          <ButtonLink href="/admin/players/ranks" variant="secondary">
+            Handicap ranks
+          </ButtonLink>
+        }
+      />
       <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
         <Card>
           <form className="border-b border-border p-3">

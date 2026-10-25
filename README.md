@@ -54,6 +54,22 @@ Unpair a lost tablet from the venue page. Tablets reach the server over the venu
 computer's network address when you browse the admin on `localhost`. For a real event, run a production build
 (`npm run build && npm start`) rather than the dev server.
 
+## Handicaps
+
+Players have a **rank per discipline** (1 = strongest), set on the player's page or for everyone at once under
+**Players → Handicap ranks**. A tournament can then use one of three handicap styles:
+
+| Style | Example: Rank 1 v Rank 2, race to 3, start of 1 |
+| --- | --- |
+| Head start for the weaker player | Rank 2 starts 1–0 up; first to 3 |
+| Minus start for the stronger player | Rank 1 starts on −1; first to 3 |
+| Longer race for the stronger player | Starts 0–0; Rank 1 races to 4, Rank 2 to 3 |
+
+The start for each rank gap comes from a small table in the tournament settings (gap 1, 2, … 5+). Ranks are copied onto
+the entries when the draw is made, so later rank changes don't alter a comp in progress; they can still be corrected on
+the entries page. Each match fixes its handicap when it starts, and the scoreboard and tablets show it. Group tables
+count only racks actually won, not starts. Rules live in `src/lib/handicap.ts`.
+
 ## Deploying (Render)
 
 The app runs as **one always-on Node server plus Postgres**. Live updates are passed around inside the server process,

@@ -56,6 +56,7 @@ model Player {
   createdAt      DateTime     @default(now())
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   entries        Entry[]
+  ranks          PlayerRank[]
 
   @@index([organizationId, lastName])
 }
@@ -108,6 +109,10 @@ model Tournament {
   grandFinalReset    Boolean      @default(true)
   // Auto-pilot: assign the next ready match whenever a table frees up.
   autoAssignTables   Boolean      @default(false)
+  // Handicap: null = level play, else HEAD_START | MINUS_START | LONGER_RACE (see src/lib/handicap.ts).
+  handicapStyle      String?
+  // Start per rank gap: [gap 1, gap 2, ...]; the last value covers larger gaps.
+  handicapStarts     Int[]        @default([])
   createdAt          DateTime     @default(now())
   organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   venue              Venue?       @relation(fields: [venueId], references: [id], onDelete: SetNull)
@@ -126,6 +131,8 @@ model Entry {
   status       String     @default("CONFIRMED") // REGISTERED | CONFIRMED | WITHDRAWN
   groupId      String?
   finalRank    Int?
+  // Handicap rank for this comp (1 = strongest). Frozen from the player's rank when the draw is made.
+  rank         Int?
   createdAt    DateTime   @default(now())
   tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
   player       Player     @relation(fields: [playerId], references: [id], onDelete: Cascade)
@@ -171,6 +178,11 @@ model Match {
   tableId      String?
   startedAt    DateTime?
   breakSlot    Int? // who broke first (1 or 2)
+  // Handicap fixed when the match starts: starting scores, and per-side race targets (null = raceTo).
+  handicap1    Int        @default(0)
+  handicap2    Int        @default(0)
+  target1      Int?
+  target2      Int?
   completedAt  DateTime?
   updatedAt    DateTime   @updatedAt
   tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
@@ -207,4 +219,15 @@ model Device {
   table          Table        @relation(fields: [tableId], references: [id], onDelete: Cascade)
 
   @@index([tableId])
+}
+
+// A player's handicap rank in one discipline (1 = strongest).
+model PlayerRank {
+  id         String @id @default(cuid())
+  playerId   String
+  discipline String
+  rank       Int
+  player     Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, discipline])
 }

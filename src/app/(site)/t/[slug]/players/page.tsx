@@ -41,6 +41,7 @@ async function Players({ params }: { params: PageProps<"/t/[slug]/players">["par
               {playerName(e.player)}
             </Link>
             {e.player.nickname && <span className="text-sm text-muted">“{e.player.nickname}”</span>}
+            {t.handicapStyle && e.rank && <Badge tone="accent">Rank {e.rank}</Badge>}
             {e.seed && <Badge>Seed {e.seed}</Badge>}
             {e.status === "REGISTERED" && <Badge tone="warn">Awaiting confirmation</Badge>}
           </li>

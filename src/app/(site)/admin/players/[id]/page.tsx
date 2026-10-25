@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { deletePlayer, updatePlayer } from "@/actions/players";
+import { deletePlayer, savePlayerRanks, updatePlayer } from "@/actions/players";
+import { DISCIPLINES } from "@/lib/constants";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { playerName } from "@/lib/queries";
@@ -21,7 +22,7 @@ async function EditPlayer({ params }: { params: PageProps<"/admin/players/[id]">
   const { id } = await params;
   const player = await db.player.findFirst({
     where: { id, organizationId: user.organizationId },
-    include: { entries: { include: { tournament: true }, orderBy: { createdAt: "desc" } } },
+    include: { entries: { include: { tournament: true }, orderBy: { createdAt: "desc" } }, ranks: true },
   });
   if (!player) notFound();
 
@@ -60,6 +61,26 @@ async function EditPlayer({ params }: { params: PageProps<"/admin/players/[id]">
             <div className="sm:col-span-2">
               <SubmitButton>Save</SubmitButton>
             </div>
+          </ActionForm>
+        </Card>
+
+        <Card>
+          <CardHeader title="Handicap ranks" subtitle="1 is the strongest. Leave blank if the player isn't ranked in that discipline." />
+          <ActionForm action={savePlayerRanks.bind(null, player.id)} className="p-5">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {Object.entries(DISCIPLINES).map(([key, label]) => (
+                <Field key={key} label={label}>
+                  <Input
+                    name={`rank-${key}`}
+                    type="number"
+                    min={1}
+                    max={999}
+                    defaultValue={player.ranks.find((r) => r.discipline === key)?.rank ?? ""}
+                  />
+                </Field>
+              ))}
+            </div>
+            <SubmitButton className="mt-4">Save ranks</SubmitButton>
           </ActionForm>
         </Card>
 

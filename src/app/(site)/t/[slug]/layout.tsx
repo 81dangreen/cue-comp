@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { DISCIPLINES, FORMATS, TOURNAMENT_STATUS, type Discipline, type Format, type TournamentStatus } from "@/lib/constants";
+import { HANDICAP_STYLES, type HandicapStyle } from "@/lib/handicap";
 import { getTournamentFull } from "@/lib/queries";
 import { LiveRefresher } from "@/components/live-refresher";
 import { TabNav } from "@/components/tab-nav";
@@ -30,6 +31,7 @@ async function Header({ params }: { params: LayoutProps<"/t/[slug]">["params"] }
     ["Race to", t.raceToFinal ? `${t.raceTo} (final ${t.raceToFinal})` : String(t.raceTo)],
     ["Players", t.maxEntries ? `${confirmed} / ${t.maxEntries}` : String(confirmed)],
     ["Entry fee", t.entryFee || "None"],
+    ...(t.handicapStyle ? ([["Handicap", HANDICAP_STYLES[t.handicapStyle as HandicapStyle] ?? "Yes"]] as [string, string][]) : []),
   ];
 
   return (
@@ -51,7 +53,7 @@ async function Header({ params }: { params: LayoutProps<"/t/[slug]">["params"] }
           </div>
           {t.status === "IN_PROGRESS" && <LiveRefresher tournamentId={t.id} />}
         </div>
-        <dl className="grid grid-cols-2 border-t border-border bg-surface-2 sm:grid-cols-3 lg:grid-cols-5">
+        <dl className="grid grid-cols-2 border-t border-border bg-surface-2 sm:grid-cols-3 lg:grid-flow-col lg:auto-cols-fr lg:grid-cols-none">
           {facts.map(([label, value]) => (
             <div key={label} className="px-5 py-3 sm:px-6">
               <dt className="text-xs font-medium text-muted">{label}</dt>
