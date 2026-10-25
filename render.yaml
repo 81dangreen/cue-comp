@@ -8,7 +8,7 @@ services:
     plan: starter # always on; the free plan sleeps after 15 idle minutes, which would break tablets
     region: frankfurt
     buildCommand: npm ci && npm run build
-    startCommand: npm start # applies pending database migrations, then starts Next.js
+    startCommand: npm start # applies pending database migrations (waiting for the database), then starts Next.js
     healthCheckPath: /api/health
     envVars:
       - key: NODE_VERSION
