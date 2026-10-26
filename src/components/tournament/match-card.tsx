@@ -93,9 +93,9 @@ export function MatchCard({
           live ? "bg-live font-semibold text-live-fg" : "border-b border-border bg-surface-2 text-muted",
         )}
       >
-        <span className="truncate" title={match.code}>
+        <span className="truncate">
           {live && <span className="live-dot mr-1">●</span>}
-          {live ? `LIVE${label ? ` · ${label}` : ""}` : (label ?? match.code)}
+          {live ? `LIVE${label ? ` · ${label}` : ""}` : label}
         </span>
         <span className="shrink-0">
           {match.table ? match.table.name : !match.isBye && !decided ? `Race to ${match.raceTo}` : ""}

@@ -10,15 +10,20 @@ export function StatusBadge({ status }: { status: string }) {
   return <Badge>Waiting</Badge>;
 }
 
-/** Compact one-line list of matches. `actions` renders an extra column per match. */
+/**
+ * Compact one-line list of matches. `labels` (matchId → round name) adds a round column for lists
+ * that mix rounds; `actions` renders an extra column per match.
+ */
 export function MatchList({
   matches,
   names,
+  labels,
   linkFor,
   actions,
 }: {
   matches: MatchWithTable[];
   names: Map<string, string>;
+  labels?: Map<string, string>;
   linkFor?: (m: MatchWithTable) => string | undefined;
   actions?: (m: MatchWithTable) => ReactNode;
 }) {
@@ -30,8 +35,8 @@ export function MatchList({
         const done = m.status === "COMPLETED";
         const href = linkFor?.(m);
         const row = (
-          <div className="grid grid-cols-[3.5rem_1fr_auto_1fr] items-center gap-3">
-            <span className="font-mono text-xs text-muted">{m.code}</span>
+          <div className={cx("grid items-center gap-3", labels ? "grid-cols-[9rem_1fr_auto_1fr]" : "grid-cols-[1fr_auto_1fr]")}>
+            {labels && <span className="truncate text-xs text-muted">{labels.get(m.id)}</span>}
             <span className={cx("truncate text-right text-[15px]", done && (m.winnerId === m.entry1Id ? "font-semibold" : "text-muted"))}>{n1}</span>
             <span className="min-w-16 rounded-md border border-border bg-surface-2 px-2 py-1 text-center text-[15px] font-bold tabular-nums">
               {m.status === "PENDING" || m.status === "READY" ? "v" : `${m.score1} – ${m.score2}`}

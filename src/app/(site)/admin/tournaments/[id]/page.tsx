@@ -13,7 +13,7 @@ import { assignTableAction } from "@/actions/matches";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { entryNames, getTournamentFull, type MatchWithTable } from "@/lib/queries";
-import { matchCounts } from "@/lib/views";
+import { matchCounts, matchLabels } from "@/lib/views";
 import { ActionButton } from "@/components/forms";
 import { MatchList } from "@/components/tournament/match-list";
 import { TableSelect } from "@/components/tournament/table-select";
@@ -34,6 +34,7 @@ async function ControlRoom({ params }: { params: PageProps<"/admin/tournaments/[
   if (!t || t.organizationId !== user.organizationId) notFound();
 
   const names = entryNames(t.entries);
+  const labels = matchLabels(t.matches, t.groups);
   const counts = matchCounts(t);
   const confirmed = t.entries.filter((e) => e.status === "CONFIRMED").length;
   const awaiting = t.entries.filter((e) => e.status === "REGISTERED").length;
@@ -150,7 +151,7 @@ async function ControlRoom({ params }: { params: PageProps<"/admin/tournaments/[
             <Card>
               <CardHeader title={`Live (${live.length})`} />
               {live.length ? (
-                <MatchList matches={live} names={names} linkFor={scoreLink} actions={matchActions} />
+                <MatchList matches={live} names={names} labels={labels} linkFor={scoreLink} actions={matchActions} />
               ) : (
                 <p className="px-5 py-4 text-sm text-muted">No matches in play.</p>
               )}
@@ -158,7 +159,7 @@ async function ControlRoom({ params }: { params: PageProps<"/admin/tournaments/[
             <Card>
               <CardHeader title={`Ready to play (${ready.length})`} subtitle="Both players known — assign a table and start" />
               {ready.length ? (
-                <MatchList matches={ready} names={names} linkFor={scoreLink} actions={matchActions} />
+                <MatchList matches={ready} names={names} labels={labels} linkFor={scoreLink} actions={matchActions} />
               ) : (
                 <p className="px-5 py-4 text-sm text-muted">Nothing waiting.</p>
               )}
@@ -166,13 +167,13 @@ async function ControlRoom({ params }: { params: PageProps<"/admin/tournaments/[
             {finished.length > 0 && (
               <Card>
                 <CardHeader title={`Finished (${finished.length})`} subtitle="Open a match to correct its result" />
-                <MatchList matches={finished} names={names} linkFor={scoreLink} />
+                <MatchList matches={finished} names={names} labels={labels} linkFor={scoreLink} />
               </Card>
             )}
             {waiting.length > 0 && (
               <Card>
                 <CardHeader title={`Waiting for players (${waiting.length})`} />
-                <MatchList matches={waiting} names={names} />
+                <MatchList matches={waiting} names={names} labels={labels} />
               </Card>
             )}
           </div>
@@ -189,7 +190,7 @@ async function ControlRoom({ params }: { params: PageProps<"/admin/tournaments/[
                         <span className="font-medium">{tb.name}</span>
                         {current ? (
                           <Link href={scoreLink(current)} className={current.status === "LIVE" ? "text-live" : "text-accent"}>
-                            {current.code} {current.status === "LIVE" ? `${current.score1}–${current.score2}` : "· starting"}
+                            {current.status === "LIVE" ? `Live ${current.score1}–${current.score2}` : "Waiting to start"}
                           </Link>
                         ) : busyIds.has(tb.id) ? (
                           <span className="text-muted">Other event</span>

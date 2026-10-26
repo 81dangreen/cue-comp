@@ -416,7 +416,7 @@ export async function assignTable(matchId: string, tableId: string | null) {
     const busy = await db.match.findFirst({
       where: { tableId, id: { not: matchId }, status: { in: ["READY", "LIVE"] } },
     });
-    if (busy) throw new ServiceError(`That table is in use (${busy.code})`);
+    if (busy) throw new ServiceError("That table already has a match on it");
   }
   await db.match.update({ where: { id: matchId }, data: { tableId } });
   publish(m.tournamentId, [m.tableId, tableId]);
