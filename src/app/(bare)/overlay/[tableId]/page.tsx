@@ -47,9 +47,9 @@ async function Overlay({ params }: { params: PageProps<"/overlay/[tableId]">["pa
         <div className="overflow-hidden rounded-xl text-white shadow-2xl" style={{ fontFamily: "var(--font-geist-sans)" }}>
           <div className="flex items-stretch bg-black/85 text-2xl font-semibold">
             <div className="flex min-w-72 items-center justify-end px-5 py-3">{name(match.entry1Id)}</div>
-            <div className="flex items-center bg-emerald-600 px-4 text-3xl font-black tabular-nums">{match.score1}</div>
+            <div className="flex items-center bg-blue-600 px-4 text-3xl font-black tabular-nums">{match.score1}</div>
             <div className="flex items-center bg-black px-3 text-sm font-medium text-white/70">({match.raceTo})</div>
-            <div className="flex items-center bg-emerald-600 px-4 text-3xl font-black tabular-nums">{match.score2}</div>
+            <div className="flex items-center bg-blue-600 px-4 text-3xl font-black tabular-nums">{match.score2}</div>
             <div className="flex min-w-72 items-center px-5 py-3">{name(match.entry2Id)}</div>
           </div>
           <div className="bg-black/70 py-1 text-center text-xs tracking-wide text-white/70 uppercase">

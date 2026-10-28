@@ -4,25 +4,25 @@
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 :root {
-  --background: #edf0ec;
+  --background: #eef1f6;
   --surface: #ffffff;
   --surface-2: #f3f5f8;
   --border: #d3d9e1;
   --foreground: #0f1720;
   --muted: #4b5563; /* 7.5:1 on white */
-  --accent: #0a6b4c; /* baize green, 6.4:1 on white */
+  --accent: #1d4ed8; /* blue, 6.7:1 on white */
   --accent-fg: #ffffff;
-  --accent-soft: #e0f2e9;
+  --accent-soft: #e0e9ff;
   --live: #c4122f;
   --live-fg: #ffffff;
   --warn: #9a4a00;
-  --header: #0c3a2c;
+  --header: #0b1a36;
   --header-fg: #ffffff;
-  /* 9-ball yellow: the one colour that grabs attention (next up, active tab, highlights). */
-  --pop: #f5c518;
-  --pop-fg: #1c1600;
-  /* Lamp-lit baize for headers: brighter in the middle, falling off to the rails. */
-  --felt: radial-gradient(120% 140% at 50% -30%, #1f8a5f 0%, #10573d 42%, #0a3628 100%);
+  /* Sky blue: the one colour that grabs attention (next up, active tab, highlights). */
+  --pop: #38bdf8;
+  --pop-fg: #04212f;
+  /* Lamp-lit navy for headers: brighter in the middle, falling off to the edges. */
+  --felt: radial-gradient(120% 140% at 50% -30%, #24477f 0%, #13284f 42%, #0b1a36 100%);
 }
 
 :root[data-theme="dark"] {
@@ -32,17 +32,79 @@
   --border: #354354;
   --foreground: #f2f5f8;
   --muted: #b0bac7;
-  --accent: #3ccf91;
-  --accent-fg: #05170f;
-  --accent-soft: #143a2b;
+  --accent: #6ea8ff;
+  --accent-fg: #06122a;
+  --accent-soft: #16264a;
   --live: #ff6b6b;
   --live-fg: #1a0505;
   --warn: #fbbf4a;
-  --header: #0b241c;
+  --header: #0a1630;
   --header-fg: #f2f5f8;
-  --pop: #f7cf3b;
+  --pop: #56c8fa;
+  --pop-fg: #04212f;
+  --felt: radial-gradient(120% 140% at 50% -30%, #1d3a6b 0%, #102247 45%, #081530 100%);
+}
+
+/*
+ * Alternative colour palettes (data-palette on <html>), ready for per-club branding. The default
+ * above is navy & sky blue. Each sets the header panel, the main accent (buttons, winner boxes)
+ * and the "pop" highlight colour; neutrals and live red are shared.
+ */
+:root[data-palette="felt"] {
+  --background: #edf0ec;
+  --accent: #0a6b4c;
+  --accent-soft: #e0f2e9;
+  --header: #0c3a2c;
+  --pop: #f5c518;
   --pop-fg: #1c1600;
-  --felt: radial-gradient(120% 140% at 50% -30%, #17694a 0%, #0d4531 45%, #072519 100%);
+  --felt: radial-gradient(120% 140% at 50% -30%, #1f8a5f 0%, #10573d 42%, #0a3628 100%);
+}
+:root[data-palette="felt"][data-theme="dark"] {
+  --accent: #3ccf91;
+  --accent-fg: #05170f;
+  --accent-soft: #143a2b;
+}
+:root[data-palette="charcoal"] {
+  --background: #f1f0ee;
+  --accent: #c2410c;
+  --accent-soft: #ffedd5;
+  --header: #15171b;
+  --pop: #ff7a1a;
+  --pop-fg: #2a1000;
+  --felt: radial-gradient(120% 140% at 50% -30%, #40454f 0%, #24282f 42%, #15171b 100%);
+}
+:root[data-palette="charcoal"][data-theme="dark"] {
+  --accent: #ff9a4d;
+  --accent-fg: #2a1000;
+  --accent-soft: #3a2414;
+}
+:root[data-palette="magenta"] {
+  --background: #f2f0f3;
+  --accent: #be185d;
+  --accent-soft: #fce7f3;
+  --header: #0b090e;
+  --pop: #ff3d8b;
+  --pop-fg: #1a0010;
+  --felt: radial-gradient(120% 140% at 50% -30%, #322a3d 0%, #17131d 45%, #0b090e 100%);
+}
+:root[data-palette="magenta"][data-theme="dark"] {
+  --accent: #ff6ba8;
+  --accent-fg: #1a0010;
+  --accent-soft: #3d1328;
+}
+:root[data-palette="violet"] {
+  --background: #f0eff6;
+  --accent: #5b3fd1;
+  --accent-soft: #ece8ff;
+  --header: #1b1445;
+  --pop: #b8f34a;
+  --pop-fg: #142100;
+  --felt: radial-gradient(120% 140% at 50% -30%, #5a46b8 0%, #2f2370 42%, #1b1445 100%);
+}
+:root[data-palette="violet"][data-theme="dark"] {
+  --accent: #a596ff;
+  --accent-fg: #120c33;
+  --accent-soft: #2a2158;
 }
 
 @theme inline {

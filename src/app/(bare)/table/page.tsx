@@ -26,13 +26,13 @@ export const metadata: Metadata = {
   appleWebApp: { capable: true, title: `${APP_NAME} table`, statusBarStyle: "black-translucent" },
 };
 
-export const viewport: Viewport = { themeColor: "#0a2a1f" };
+export const viewport: Viewport = { themeColor: "#0d1d3b" };
 
 /** Results stay on screen this long after a match ends. */
 const RESULT_DISPLAY_MS = 10 * 60 * 1000;
 const resultCutoff = () => new Date(Date.now() - RESULT_DISPLAY_MS);
 
-const screen = "min-h-dvh bg-[radial-gradient(ellipse_at_top,#14513c_0%,#0a2a1f_45%,#05120d_100%)] text-white";
+const screen = "min-h-dvh bg-[radial-gradient(ellipse_at_top,#1d3a6b_0%,#0d1d3b_45%,#060d1c_100%)] text-white";
 
 export default function TablePage({ searchParams }: PageProps<"/table">) {
   return (
@@ -144,7 +144,7 @@ async function TableScreen({ searchParams }: { searchParams: PageProps<"/table">
         <TopBar tableName={device.table.name} venueName={device.table.venue.name} />
         <div className="flex flex-1 flex-col items-center justify-center gap-10 py-8 text-center">
           <div>
-            <p className="text-sm font-semibold tracking-[0.2em] text-emerald-300 uppercase">Next match</p>
+            <p className="text-sm font-semibold tracking-[0.2em] text-sky-300 uppercase">Next match</p>
             <p className="mt-2 text-lg text-white/75">
               {current.tournament.name} · {await matchRoundName(current)} · {raceText(current.tournament)(current)}
             </p>

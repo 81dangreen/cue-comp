@@ -12,7 +12,7 @@ type Props = {
 
 const QUEUE_LIMIT = 12;
 
-/** "Table 3" as a yellow ball with a 3 on it, beside the name; other names are shown as they are. */
+/** "Table 3" as a ball in the highlight colour with a 3 on it, beside the name; other names are shown as they are. */
 export function TableBall({ name, className }: { name: string; className?: string }) {
   const number = name.match(/(\d+)\s*$/)?.[1];
   if (!number) return null;

@@ -6,7 +6,7 @@ export function GET() {
   const { shaft, ferrule, tip, ball, stripe, spot, tilt, colors } = LOGO;
   return new ImageResponse(
     (
-      <div style={{ width: "100%", height: "100%", display: "flex", background: "#0c3a2c" }}>
+      <div style={{ width: "100%", height: "100%", display: "flex", background: "#0b1a36" }}>
         <svg viewBox="-5 -5 46 46" width="512" height="512">
           <polygon points={shaft} fill={colors.shaft} />
           <polygon points={ferrule} fill={colors.ferrule} />

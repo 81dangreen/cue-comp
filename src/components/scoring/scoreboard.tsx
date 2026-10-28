@@ -151,7 +151,7 @@ export function Scoreboard(props: Props) {
     : null;
 
   return (
-    <div className="flex min-h-dvh flex-col bg-[radial-gradient(ellipse_at_top,#14513c_0%,#0a2a1f_45%,#05120d_100%)] p-3 text-white sm:p-6">
+    <div className="flex min-h-dvh flex-col bg-[radial-gradient(ellipse_at_top,#1d3a6b_0%,#0d1d3b_45%,#060d1c_100%)] p-3 text-white sm:p-6">
       <header className="mb-3 flex items-center justify-between gap-3 text-sm text-white/70">
         {props.backHref ? (
           <Link href={props.backHref} className="rounded-lg px-2 py-1 hover:bg-white/10">
@@ -217,7 +217,7 @@ export function Scoreboard(props: Props) {
 
       {finishing && confirmScore && (
         <div className="fixed inset-0 z-40 grid place-items-center bg-black/70 p-6" role="dialog" aria-modal="true">
-          <div className="w-full max-w-md rounded-3xl border border-white/15 bg-[#0d2a20] p-6 text-center shadow-2xl">
+          <div className="w-full max-w-md rounded-3xl border border-white/15 bg-[#0f2140] p-6 text-center shadow-2xl">
             <p className="text-sm font-medium tracking-wide text-white/60 uppercase">Confirm result</p>
             <p className="mt-3 text-3xl font-bold">{name(finishing.slot)} wins</p>
             <p className="mt-2 text-5xl font-black tabular-nums">

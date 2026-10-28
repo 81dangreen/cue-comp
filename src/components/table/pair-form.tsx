@@ -33,7 +33,7 @@ export function PairForm({ code }: { code?: string }) {
       <button
         type="submit"
         disabled={pending}
-        className="w-full rounded-2xl bg-emerald-400 py-4 text-xl font-bold text-black active:bg-emerald-300 disabled:opacity-60"
+        className="w-full rounded-2xl bg-sky-400 py-4 text-xl font-bold text-black active:bg-sky-300 disabled:opacity-60"
       >
         {pending ? "Pairing…" : "Pair tablet"}
       </button>

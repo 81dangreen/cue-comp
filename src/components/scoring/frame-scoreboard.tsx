@@ -51,7 +51,7 @@ const SIDE = {
   2: { dot: "bg-amber-300", chip: "bg-amber-400/25 text-amber-100", button: "border-amber-300/40 from-amber-400/25 to-amber-400/5" },
 } as const;
 
-const screen = "flex min-h-dvh flex-col bg-[radial-gradient(ellipse_at_top,#14513c_0%,#0a2a1f_45%,#05120d_100%)] p-3 text-white sm:p-6";
+const screen = "flex min-h-dvh flex-col bg-[radial-gradient(ellipse_at_top,#1d3a6b_0%,#0d1d3b_45%,#060d1c_100%)] p-3 text-white sm:p-6";
 
 /** Who breaks a frame: the first breaker, then alternating. */
 const breakerOf = (breakSlot: number | null | undefined, frameNumber: number) =>
@@ -171,7 +171,7 @@ export function FrameScoreboard(props: FrameMatchProps) {
         {finished ? (
           <div className="grid flex-1 place-items-center text-center">
             <div>
-              <p className="text-sm font-semibold tracking-[0.2em] text-emerald-300 uppercase">Final result</p>
+              <p className="text-sm font-semibold tracking-[0.2em] text-sky-300 uppercase">Final result</p>
               <p className="mt-2 text-4xl font-bold sm:text-5xl">{resultLine}</p>
               <p className="mt-2 text-6xl font-black tabular-nums">
                 {props.score1} – {props.score2}
@@ -181,7 +181,7 @@ export function FrameScoreboard(props: FrameMatchProps) {
         ) : (
           <>
             <div className="text-center">
-              <p className="text-sm font-semibold tracking-[0.2em] text-emerald-300 uppercase">
+              <p className="text-sm font-semibold tracking-[0.2em] text-sky-300 uppercase">
                 Frame {next.number}
                 {!next.decider && ` of ${props.format.frames.length}`} · {next.decider ? "Deciding frame · Doubles" : singles ? "Singles" : "Doubles"}
               </p>
@@ -296,7 +296,7 @@ export function FrameScoreboard(props: FrameMatchProps) {
 
       {finishing && preview?.done && (
         <div className="fixed inset-0 z-40 grid place-items-center bg-black/70 p-6" role="dialog" aria-modal="true">
-          <div className="w-full max-w-md rounded-3xl border border-white/15 bg-[#0d2a20] p-6 text-center shadow-2xl">
+          <div className="w-full max-w-md rounded-3xl border border-white/15 bg-[#0f2140] p-6 text-center shadow-2xl">
             <p className="text-sm font-medium tracking-wide text-white/60 uppercase">Confirm result</p>
             <p className="mt-3 text-3xl font-bold">
               {preview.winner ? `${preview.winner === 1 ? props.team1 : props.team2} win` : "Match drawn"}
