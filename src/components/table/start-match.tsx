@@ -23,7 +23,7 @@ export function StartMatch({ matchId, player1, player2 }: { matchId: string; pla
             type="button"
             disabled={pending}
             onClick={() => start(slot)}
-            className="rounded-2xl border border-white/15 bg-white/10 px-6 py-6 text-2xl font-bold shadow-lg active:scale-[0.98] active:bg-white/20 disabled:opacity-50"
+            className="rounded-2xl border border-white/15 bg-white/10 px-4 py-[min(1.5rem,3vh)] text-xl sm:text-2xl font-bold shadow-lg active:scale-[0.98] active:bg-white/20 disabled:opacity-50"
           >
             <span className={`mr-3 inline-block h-3 w-3 rounded-full ${slot === 1 ? "bg-sky-300" : "bg-amber-300"}`} />
             {slot === 1 ? player1 : player2}

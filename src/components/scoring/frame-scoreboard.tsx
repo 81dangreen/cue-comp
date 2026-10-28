@@ -55,7 +55,10 @@ const SIDE = {
   2: { dot: "bg-amber-300", chip: "bg-amber-400/25 text-amber-100", button: "border-amber-300/40 from-amber-400/25 to-amber-400/5" },
 } as const;
 
-const screen = "flex min-h-dvh flex-col bg-[radial-gradient(ellipse_at_top,#1d3a6b_0%,#0d1d3b_45%,#060d1c_100%)] p-3 text-white sm:p-6";
+const screen =
+  "flex h-dvh flex-col gap-2 overflow-hidden bg-[radial-gradient(ellipse_at_top,#1d3a6b_0%,#0d1d3b_45%,#060d1c_100%)] p-2 text-white sm:gap-3 sm:p-4";
+const dishButton =
+  "flex-1 truncate rounded-lg border border-white/10 bg-white/5 px-2 py-2 text-xs font-medium text-white/80 active:bg-white/15 disabled:opacity-40 sm:rounded-xl sm:text-sm";
 
 /** Scoring for frame-list matches: a strip of every frame and big "who won this frame" buttons. */
 export function FrameScoreboard(props: FrameMatchProps) {
@@ -128,71 +131,88 @@ export function FrameScoreboard(props: FrameMatchProps) {
         : null;
   const preview = finishing ? outcomeIf(finishing.slot) : null;
 
+  const sideButtons = (slot: 1 | 2) => (
+    // A break & run belongs to the breaker and a reverse dish to the other side; offer only those.
+    <div className="flex gap-2">
+      {(breaker === null || breaker === slot) && (
+        <button type="button" disabled={!scorable || !ready || pending} onClick={() => tap(slot, "BREAK")} className={dishButton}>
+          + Break &amp; run
+        </button>
+      )}
+      {(breaker === null || breaker !== slot) && (
+        <button type="button" disabled={!scorable || !ready || pending} onClick={() => tap(slot, "REVERSE")} className={dishButton}>
+          + Reverse dish
+        </button>
+      )}
+    </div>
+  );
+
   return (
+    // Fills the screen exactly (no scrolling) from a 6" phone up: sizes follow the screen height.
     <div className={screen}>
-      <header className="mb-3 flex items-center justify-between gap-3 text-sm text-white/70">
+      <header className="flex items-center justify-between gap-2 text-xs text-white/70 sm:text-sm">
         {props.backHref ? (
           <Link href={props.backHref} className="rounded-lg px-2 py-1 hover:bg-white/10">
             ← Back
           </Link>
         ) : (
-          <span className="rounded-lg bg-white/10 px-3 py-1 font-semibold text-white">{props.tableName}</span>
+          <span className="shrink-0 rounded-lg bg-white/10 px-2.5 py-1 font-semibold text-white">{props.tableName}</span>
         )}
         <div className="min-w-0 truncate text-center">
           <span className="font-semibold text-white">{props.tournamentName}</span> · {props.roundName}
         </div>
-        <div className="text-right whitespace-nowrap">
+        <div className="shrink-0 text-right whitespace-nowrap">
           {props.backHref && props.tableName && <span className="mr-2">{props.tableName}</span>}
           {props.format.finish === "ALL" ? (
             <span className="font-semibold text-white">{props.format.frames.length} frames</span>
           ) : (
             <>
-              First to <span className="text-lg font-bold text-white">{props.target1 === props.target2 ? props.target1 : "target"}</span>
+              First to <span className="font-bold text-white sm:text-lg">{props.target1 === props.target2 ? props.target1 : "target"}</span>
             </>
           )}
         </div>
       </header>
       {props.handicapNote && (
-        <div className="mb-3 rounded-xl bg-amber-300/15 px-4 py-2 text-center text-sm font-semibold text-amber-100">
+        <p className="truncate rounded-lg bg-amber-300/15 px-3 py-1 text-center text-xs font-semibold text-amber-100 sm:text-sm">
           Handicap: {props.handicapNote}
-        </div>
+        </p>
       )}
 
       {/* Match score */}
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 rounded-3xl border border-white/10 bg-white/[0.06] px-4 py-3 sm:px-6">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.06] px-3 py-1.5 sm:px-5 sm:py-2">
         <TeamScore slot={1} team={props.team1} score={props.score1} members={props.members[1]} lineup={props.lineup} won={props.winnerSlot === 1} />
-        <span className="text-xl font-semibold text-white/40">v</span>
+        <span className="text-base font-semibold text-white/40">v</span>
         <TeamScore slot={2} team={props.team2} score={props.score2} members={props.members[2]} lineup={props.lineup} won={props.winnerSlot === 2} />
       </div>
 
       {/* Current frame */}
-      <div className="mt-3 flex flex-1 flex-col justify-center gap-3">
+      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
         {finished ? (
           <div className="grid flex-1 place-items-center text-center">
             <div>
               <p className="text-sm font-semibold tracking-[0.2em] text-sky-300 uppercase">Final result</p>
-              <p className="mt-2 text-4xl font-bold sm:text-5xl">{resultLine}</p>
-              <p className="mt-2 text-6xl font-black tabular-nums">
+              <p className="mt-2 text-3xl font-bold sm:text-5xl">{resultLine}</p>
+              <p className="mt-2 text-5xl font-black tabular-nums sm:text-6xl">
                 {props.score1} – {props.score2}
               </p>
             </div>
           </div>
         ) : (
           <>
-            <div className="text-center">
-              <p className="text-sm font-semibold tracking-[0.2em] text-sky-300 uppercase">
+            <p className="text-center text-xs sm:text-sm">
+              <span className="font-semibold tracking-[0.16em] text-sky-300 uppercase">
                 Frame {next.number}
-                {!next.decider && ` of ${props.format.frames.length}`} · {next.decider ? "Deciding frame · Doubles" : singles ? "Singles" : "Doubles"}
-              </p>
-              {breaker && <p className="mt-1 text-sm text-white/70">{teamName(breaker)} to break</p>}
-            </div>
+                {!next.decider && ` of ${props.format.frames.length}`} · {next.decider ? "Decider · Doubles" : singles ? "Singles" : "Doubles"}
+              </span>
+              {breaker && <span className="text-white/70"> · {teamName(breaker)} to break</span>}
+            </p>
 
             {pickEach && (
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid grid-cols-2 gap-2">
                 {([1, 2] as const).map((slot) => (
-                  <div key={slot} className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                    <p className="mb-2 text-center text-sm text-white/70">Who plays for {slot === 1 ? props.team1 : props.team2}?</p>
-                    <div className="grid grid-cols-2 gap-2">
+                  <div key={slot} className="rounded-xl border border-white/10 bg-white/5 p-2">
+                    <p className="mb-1.5 truncate text-center text-xs text-white/70">Who plays for {teamName(slot)}?</p>
+                    <div className="grid gap-1.5 sm:grid-cols-2">
                       {props.members[slot].map((m) => {
                         const used = singlesPlayed(m.id, slot) >= props.quota;
                         const on = (slot === 1 ? picked.player1Id : picked.player2Id) === m.id;
@@ -203,12 +223,12 @@ export function FrameScoreboard(props: FrameMatchProps) {
                             disabled={used}
                             onClick={() => setPicked({ ...picked, [slot === 1 ? "player1Id" : "player2Id"]: m.id })}
                             className={cx(
-                              "rounded-xl border px-3 py-3 text-lg font-semibold disabled:opacity-30",
+                              "truncate rounded-lg border px-2 py-2 text-sm font-semibold disabled:opacity-30 sm:text-base",
                               on ? "border-white bg-white text-black" : "border-white/15 bg-white/10 active:bg-white/20",
                             )}
                           >
                             {m.name}
-                            {used && <span className="block text-xs font-normal">played {props.quota}</span>}
+                            {used && <span className="block text-[11px] font-normal">played {props.quota}</span>}
                           </button>
                         );
                       })}
@@ -217,56 +237,38 @@ export function FrameScoreboard(props: FrameMatchProps) {
                 ))}
               </div>
             )}
+            {!ready && <p className="text-center text-sm text-white/70">Choose both players first</p>}
 
-            <p className="text-center text-white/70">{ready ? "Tap the winner of this frame" : "Choose both players first"}</p>
-            <div className="grid flex-1 gap-3 sm:grid-cols-2">
+            <div className="grid min-h-0 flex-1 grid-cols-2 gap-2 sm:gap-3">
               {([1, 2] as const).map((slot) => (
-                <div key={slot} className="flex flex-col gap-2">
+                <div key={slot} className="flex min-h-0 min-w-0 flex-col gap-2">
                   <button
                     type="button"
                     disabled={!scorable || !ready || pending}
                     onClick={() => tap(slot)}
                     className={cx(
-                      "flex min-h-32 flex-1 flex-col items-center justify-center gap-2 rounded-3xl border bg-gradient-to-b p-4 shadow-xl transition select-none",
+                      "flex min-h-24 flex-1 flex-col items-center justify-center gap-1 rounded-2xl border bg-gradient-to-b p-2 shadow-xl transition select-none sm:gap-2 sm:rounded-3xl",
                       SIDE[slot].button,
                       "active:scale-[0.985] disabled:opacity-40",
                     )}
                   >
                     {breaker === slot && (
-                      <span className="rounded-full bg-white px-3 py-1 text-xs font-bold tracking-wide text-black uppercase">Breaking</span>
+                      <span className="rounded-full bg-white px-2.5 py-0.5 text-[11px] font-bold tracking-wide text-black uppercase sm:text-xs">
+                        Breaking
+                      </span>
                     )}
                     <span className="flex max-w-full items-center gap-2">
-                      <span className={cx("h-3 w-3 shrink-0 rounded-full", SIDE[slot].dot)} />
-                      <span className="truncate text-2xl font-bold sm:text-4xl">{sideLabel(slot)}</span>
+                      <span className={cx("h-2.5 w-2.5 shrink-0 rounded-full sm:h-3 sm:w-3", SIDE[slot].dot)} />
+                      <span className="line-clamp-2 text-[clamp(1rem,min(6.5vw,4.5vh),2.25rem)] leading-tight font-bold break-words">
+                        {sideLabel(slot)}
+                      </span>
                     </span>
                     {singles && nextPlayers[slot === 1 ? "player1Id" : "player2Id"] && (
-                      <span className="text-sm text-white/60">{teamName(slot)}</span>
+                      <span className="max-w-full truncate text-xs text-white/60 sm:text-sm">{teamName(slot)}</span>
                     )}
-                    <span className="text-sm font-semibold text-white/80">won the frame</span>
+                    <span className="text-xs font-semibold text-white/80 sm:text-sm">won the frame</span>
                   </button>
-                  {/* A break & run belongs to the breaker and a reverse dish to the other side; offer only those. */}
-                  <div className="flex gap-2">
-                    {(breaker === null || breaker === slot) && (
-                      <button
-                        type="button"
-                        disabled={!scorable || !ready || pending}
-                        onClick={() => tap(slot, "BREAK")}
-                        className="flex-1 rounded-xl border border-white/10 bg-white/5 py-3 text-sm font-medium text-white/80 active:bg-white/15 disabled:opacity-40"
-                      >
-                        + Break &amp; run (dish)
-                      </button>
-                    )}
-                    {(breaker === null || breaker !== slot) && (
-                      <button
-                        type="button"
-                        disabled={!scorable || !ready || pending}
-                        onClick={() => tap(slot, "REVERSE")}
-                        className="flex-1 rounded-xl border border-white/10 bg-white/5 py-3 text-sm font-medium text-white/80 active:bg-white/15 disabled:opacity-40"
-                      >
-                        + Reverse dish
-                      </button>
-                    )}
-                  </div>
+                  {sideButtons(slot)}
                 </div>
               ))}
             </div>
@@ -274,9 +276,9 @@ export function FrameScoreboard(props: FrameMatchProps) {
         )}
       </div>
 
-      {/* Every frame */}
-      <footer className="mt-3 flex flex-wrap items-end justify-between gap-3">
-        <ol className="flex max-w-full gap-1.5 overflow-x-auto pb-1" aria-label="Frames">
+      {/* Every frame, and undo */}
+      <footer className="flex items-center gap-2">
+        <ol className="flex min-w-0 flex-1 gap-1 overflow-x-auto" aria-label="Frames">
           {Array.from({ length: Math.max(props.format.frames.length, played) }, (_, i) => {
             const f = props.frames[i];
             const at = frameAt(props.format, i);
@@ -291,27 +293,25 @@ export function FrameScoreboard(props: FrameMatchProps) {
                 key={i}
                 title={label}
                 className={cx(
-                  "flex w-[4.5rem] shrink-0 flex-col items-center rounded-lg px-1 py-1 text-center",
+                  "flex w-14 shrink-0 flex-col items-center rounded-md px-1 py-0.5 text-center sm:w-[4.5rem]",
                   f ? SIDE[f.winner as 1 | 2].chip : i === played && !finished ? "bg-white/20 ring-2 ring-white" : "bg-white/5 text-white/50",
                 )}
               >
-                <span className="text-xs font-bold">{at.decider ? "Decider" : i + 1}</span>
-                <span className="w-full truncate text-[11px]">{label}</span>
+                <span className="text-[11px] font-bold sm:text-xs">{at.decider ? "Decider" : i + 1}</span>
+                <span className="w-full truncate text-[10px] sm:text-[11px]">{label}</span>
               </li>
             );
           })}
         </ol>
-        <div className="flex items-center gap-3">
-          {error && <span className="text-sm font-medium text-red-300">{error}</span>}
-          <button
-            type="button"
-            onClick={undo}
-            disabled={!played || pending || (props.confirmFinish && finished)}
-            className="rounded-xl border border-white/10 bg-white/10 px-5 py-3 text-sm font-semibold active:bg-white/20 disabled:opacity-30"
-          >
-            Undo last frame
-          </button>
-        </div>
+        {error && <span className="max-w-40 text-xs font-medium text-red-300">{error}</span>}
+        <button
+          type="button"
+          onClick={undo}
+          disabled={!played || pending || (props.confirmFinish && finished)}
+          className="shrink-0 rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-xs font-semibold whitespace-nowrap active:bg-white/20 disabled:opacity-30 sm:px-5 sm:py-3 sm:text-sm"
+        >
+          Undo
+        </button>
       </footer>
 
       {finishing && preview?.done && (
@@ -373,14 +373,15 @@ function TeamScore({
   const letter = (id: string) => (lineup ? (lineup[slot].A === id ? "A" : lineup[slot].B === id ? "B" : null) : null);
   const ordered = lineup ? [...members].sort((a, b) => (letter(a.id) ?? "").localeCompare(letter(b.id) ?? "")) : members;
   return (
-    <div className={cx("flex min-w-0 items-center gap-4", slot === 2 && "flex-row-reverse text-right")}>
-      <span className={cx("text-6xl leading-none font-black tabular-nums sm:text-8xl", won && "text-emerald-300")}>{score}</span>
+    <div className={cx("flex min-w-0 items-center gap-2 sm:gap-4", slot === 2 && "flex-row-reverse text-right")}>
+      <span className={cx("text-[clamp(2.25rem,9vh,6rem)] leading-none font-black tabular-nums", won && "text-emerald-300")}>{score}</span>
       <div className="min-w-0">
-        <p className="flex items-center gap-2 truncate text-lg font-bold sm:text-2xl">
+        <p className="flex items-center gap-2 text-sm leading-tight font-bold sm:text-xl lg:text-2xl">
           <span className={cx("h-2.5 w-2.5 shrink-0 rounded-full", SIDE[slot].dot, slot === 2 && "order-last")} />
-          <span className="truncate">{team}</span>
+          {/* Two lines on phones rather than cutting a pair's names short. */}
+          <span className="line-clamp-2 break-words sm:line-clamp-1">{team}</span>
         </p>
-        <p className="truncate text-sm text-white/65">
+        <p className="hidden truncate text-xs text-white/65 sm:block sm:text-sm">
           {ordered.map((m, i) => (
             <span key={m.id}>
               {i > 0 && " · "}
@@ -431,7 +432,7 @@ export function FrameMatchStart({
     });
 
   return (
-    <div className="w-full max-w-3xl space-y-6">
+    <div className="w-full max-w-3xl space-y-[3vh]">
       {choose && (
         <div className="grid gap-4 sm:grid-cols-2">
           {([1, 2] as const).map((slot) => (
@@ -469,7 +470,7 @@ export function FrameMatchStart({
               type="button"
               disabled={pending || !ready}
               onClick={() => go(slot)}
-              className="rounded-2xl border border-white/15 bg-white/10 px-6 py-6 text-2xl font-bold shadow-lg active:scale-[0.98] active:bg-white/20 disabled:opacity-40"
+              className="rounded-2xl border border-white/15 bg-white/10 px-4 py-[min(1.5rem,3vh)] text-xl sm:text-2xl font-bold shadow-lg active:scale-[0.98] active:bg-white/20 disabled:opacity-40"
             >
               <span className={cx("mr-3 inline-block h-3 w-3 rounded-full", SIDE[slot].dot)} />
               {slot === 1 ? team1 : team2}

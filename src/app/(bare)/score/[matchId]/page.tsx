@@ -88,13 +88,13 @@ async function Score({ params }: { params: PageProps<"/score/[matchId]">["params
     <>
       <LiveRefresher tournamentId={match.tournamentId} quiet />
       {frameMatch && notStarted ? (
-        <div className="flex min-h-dvh flex-col items-center gap-8 bg-[radial-gradient(ellipse_at_top,#1d3a6b_0%,#0d1d3b_45%,#060d1c_100%)] p-6 text-white">
+        <div className="flex min-h-dvh flex-col items-center gap-[3vh] bg-[radial-gradient(ellipse_at_top,#1d3a6b_0%,#0d1d3b_45%,#060d1c_100%)] p-3 text-white sm:p-6">
           <Link href={backHref} className="self-start rounded-lg px-2 py-1 text-sm text-white/70 hover:bg-white/10">
             ← Back
           </Link>
           <div className="text-center">
             <p className="text-sm font-semibold tracking-[0.2em] text-sky-300 uppercase">{roundName}</p>
-            <p className="mt-3 text-3xl font-bold sm:text-5xl">
+            <p className="mt-2 text-2xl font-bold sm:text-4xl">
               {frameMatch.team1} <span className="text-white/50">v</span> {frameMatch.team2}
             </p>
             {frameMatch.handicapNote && (

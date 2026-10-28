@@ -40,6 +40,9 @@ type Props = {
   undo: () => Promise<ActionResult>;
 };
 
+const dishButton =
+  "flex-1 truncate rounded-lg border border-white/10 bg-white/5 px-2 py-2 text-xs font-medium text-white/75 active:bg-white/15 sm:rounded-xl sm:py-3 sm:text-sm";
+
 const SIDE = {
   1: { chip: "bg-sky-400/25 text-sky-100", ring: "ring-sky-300/60" },
   2: { chip: "bg-amber-400/25 text-amber-100", ring: "ring-amber-300/60" },
@@ -103,58 +106,55 @@ export function Scoreboard(props: Props) {
     const start = (slot === 1 ? props.handicap1 : props.handicap2) ?? 0;
     const rank = slot === 1 ? props.rank1 : props.rank2;
     return (
-      <div className={cx("relative flex flex-1 flex-col", lost && "opacity-40")}>
+      <div className={cx("relative flex min-h-0 min-w-0 flex-1 flex-col gap-2", lost && "opacity-40")}>
         <button
           type="button"
           onClick={() => scoreRack(slot)}
           disabled={!scorable}
           className={cx(
-            "flex flex-1 flex-col items-center justify-center gap-3 rounded-3xl border border-white/10 p-4 shadow-xl transition select-none",
+            "flex min-h-0 flex-1 flex-col items-center justify-center gap-1 rounded-2xl border border-white/10 p-2 shadow-xl transition select-none sm:gap-3 sm:rounded-3xl sm:p-4",
             "bg-gradient-to-b from-white/[0.09] to-white/[0.03]",
             scorable && "active:scale-[0.985] active:from-white/15",
             won && "border-emerald-300/70 from-emerald-400/25 to-emerald-400/5",
           )}
         >
           <span className="flex max-w-full items-center gap-2">
-            <span className={cx("h-3 w-3 shrink-0 rounded-full", slot === 1 ? "bg-sky-300" : "bg-amber-300")} />
-            <span className="truncate text-2xl font-semibold sm:text-4xl">{name(slot)}</span>
-            {rank && <span className="rounded-md bg-white/15 px-2 py-0.5 text-sm font-bold text-white/85">R{rank}</span>}
+            <span className={cx("h-2.5 w-2.5 shrink-0 rounded-full sm:h-3 sm:w-3", slot === 1 ? "bg-sky-300" : "bg-amber-300")} />
+            <span className="line-clamp-2 text-center text-[clamp(1rem,min(6.5vw,4.5vh),2.25rem)] leading-tight font-semibold break-words">
+              {name(slot)}
+            </span>
+            {rank && <span className="rounded-md bg-white/15 px-1.5 py-0.5 text-xs font-bold text-white/85 sm:text-sm">R{rank}</span>}
           </span>
           {(!evenRace || start !== 0) && (
-            <span className="text-sm font-medium text-white/70">
+            <span className="text-xs font-medium text-white/70 sm:text-sm">
               {!evenRace && <>Race to {target(slot)}</>}
               {!evenRace && start !== 0 && " · "}
               {start > 0 && <>Started {start} up</>}
               {start < 0 && <>Started on {start}</>}
             </span>
           )}
-          <span className="text-[8rem] leading-none font-black tabular-nums drop-shadow-lg sm:text-[13rem]">{value}</span>
-          <span className="flex h-7 items-center gap-2">
+          {/* The score grows with the screen but always leaves room for the rest of the panel. */}
+          <span className="text-[clamp(4rem,min(38vw,32vh),13rem)] leading-none font-black tabular-nums drop-shadow-lg">{value}</span>
+          <span className="flex min-h-6 flex-wrap items-center justify-center gap-1.5">
             {breaker === slot && !finished && (
-              <span className="rounded-full bg-white px-3 py-1 text-xs font-bold tracking-wide text-black uppercase">Breaking</span>
+              <span className="rounded-full bg-white px-2.5 py-0.5 text-[11px] font-bold tracking-wide text-black uppercase sm:px-3 sm:py-1 sm:text-xs">
+                Breaking
+              </span>
             )}
-            {hill && <span className="rounded-full bg-amber-300 px-3 py-1 text-xs font-bold text-black">HILL</span>}
-            {won && <span className="rounded-full bg-emerald-300 px-4 py-1 text-sm font-bold text-black">WINNER</span>}
+            {hill && <span className="rounded-full bg-amber-300 px-2.5 py-0.5 text-[11px] font-bold text-black sm:px-3 sm:py-1 sm:text-xs">HILL</span>}
+            {won && <span className="rounded-full bg-emerald-300 px-3 py-0.5 text-xs font-bold text-black sm:px-4 sm:py-1 sm:text-sm">WINNER</span>}
           </span>
         </button>
         {scorable && (
           // A break & run belongs to the breaker and a reverse dish to the other player; offer only those.
-          <div className="mt-2 flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             {(breaker === null || breaker === slot) && (
-              <button
-                type="button"
-                onClick={() => scoreRack(slot, "BREAK")}
-                className="flex-1 rounded-xl border border-white/10 bg-white/5 py-3 text-sm font-medium text-white/75 active:bg-white/15"
-              >
+              <button type="button" onClick={() => scoreRack(slot, "BREAK")} className={dishButton}>
                 + Break &amp; run
               </button>
             )}
             {(breaker === null || breaker !== slot) && (
-              <button
-                type="button"
-                onClick={() => scoreRack(slot, "REVERSE")}
-                className="flex-1 rounded-xl border border-white/10 bg-white/5 py-3 text-sm font-medium text-white/75 active:bg-white/15"
-              >
+              <button type="button" onClick={() => scoreRack(slot, "REVERSE")} className={dishButton}>
                 + Reverse dish
               </button>
             )}
@@ -171,23 +171,24 @@ export function Scoreboard(props: Props) {
     : null;
 
   return (
-    <div className="flex min-h-dvh flex-col bg-[radial-gradient(ellipse_at_top,#1d3a6b_0%,#0d1d3b_45%,#060d1c_100%)] p-3 text-white sm:p-6">
-      <header className="mb-3 flex items-center justify-between gap-3 text-sm text-white/70">
+    // Fills the screen exactly (no scrolling) from a 6" phone up; players stay side by side.
+    <div className="flex h-dvh flex-col gap-2 overflow-hidden bg-[radial-gradient(ellipse_at_top,#1d3a6b_0%,#0d1d3b_45%,#060d1c_100%)] p-2 text-white sm:gap-3 sm:p-4">
+      <header className="flex items-center justify-between gap-2 text-xs text-white/70 sm:text-sm">
         {props.backHref ? (
           <Link href={props.backHref} className="rounded-lg px-2 py-1 hover:bg-white/10">
             ← Back
           </Link>
         ) : (
-          <span className="rounded-lg bg-white/10 px-3 py-1 font-semibold text-white">{props.tableName}</span>
+          <span className="shrink-0 rounded-lg bg-white/10 px-2.5 py-1 font-semibold text-white">{props.tableName}</span>
         )}
         <div className="min-w-0 truncate text-center">
           <span className="font-semibold text-white">{props.tournamentName}</span> · {props.roundName}
         </div>
-        <div className="text-right whitespace-nowrap">
+        <div className="shrink-0 text-right whitespace-nowrap">
           {props.backHref && props.tableName && <span className="mr-2">{props.tableName}</span>}
           {evenRace ? (
             <>
-              Race to <span className="text-lg font-bold text-white">{target(1)}</span>
+              Race to <span className="font-bold text-white sm:text-lg">{target(1)}</span>
             </>
           ) : (
             <span className="font-semibold text-white">Handicap race</span>
@@ -195,18 +196,18 @@ export function Scoreboard(props: Props) {
         </div>
       </header>
       {props.handicapNote && (
-        <div className="mb-3 rounded-xl bg-amber-300/15 px-4 py-2 text-center text-sm font-semibold text-amber-100">
+        <p className="truncate rounded-lg bg-amber-300/15 px-3 py-1 text-center text-xs font-semibold text-amber-100 sm:text-sm">
           Handicap: {props.handicapNote}
-        </div>
+        </p>
       )}
 
-      <div className="flex flex-1 flex-col gap-3 sm:flex-row">
+      <div className="flex min-h-0 flex-1 gap-2 sm:gap-3">
         {panel(1)}
         {panel(2)}
       </div>
 
-      <footer className="mt-3 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex max-w-full gap-1 overflow-x-auto" aria-label="Rack history">
+      <footer className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto" aria-label="Rack history">
           {props.frames.map((f, i) => (
             <span
               key={i}
@@ -222,16 +223,16 @@ export function Scoreboard(props: Props) {
             </span>
           ))}
         </div>
-        <div className="flex items-center gap-3">
-          {error && <span className="text-sm font-medium text-red-300">{error}</span>}
-          {props.status === "READY" && <span className="text-sm text-white/70">Tap a player to score the first rack</span>}
+        <div className="flex shrink-0 items-center gap-2">
+          {error && <span className="max-w-40 text-xs font-medium text-red-300 sm:text-sm">{error}</span>}
+          {props.status === "READY" && <span className="hidden text-sm text-white/70 sm:inline">Tap a player to score the first rack</span>}
           <button
             type="button"
             onClick={undo}
             disabled={!props.canUndo || pending || (props.confirmFinish && finished)}
-            className="rounded-xl border border-white/10 bg-white/10 px-5 py-3 text-sm font-semibold active:bg-white/20 disabled:opacity-30"
+            className="rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-xs font-semibold whitespace-nowrap active:bg-white/20 disabled:opacity-30 sm:px-5 sm:py-3 sm:text-sm"
           >
-            Undo last rack
+            Undo
           </button>
         </div>
       </footer>

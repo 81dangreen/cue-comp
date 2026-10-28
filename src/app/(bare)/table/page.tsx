@@ -140,10 +140,10 @@ async function TableScreen({ searchParams }: { searchParams: PageProps<"/table">
 
   if (current) {
     return (
-      <main className={`${screen} flex flex-col p-6`}>
+      <main className={`${screen} flex flex-col p-3 sm:p-6`}>
         {chrome}
         <TopBar tableName={device.table.name} venueName={device.table.venue.name} />
-        <div className="flex flex-1 flex-col items-center justify-center gap-10 py-8 text-center">
+        <div className="flex flex-1 flex-col items-center justify-center gap-[3vh] py-[2vh] text-center">
           <div>
             <p className="text-sm font-semibold tracking-[0.2em] text-sky-300 uppercase">Next match</p>
             <p className="mt-2 text-lg text-white/75">
@@ -235,7 +235,7 @@ function PairScreen({ code }: { code?: string }) {
 function PlayerHeading({ name, rank, group }: { name: string; rank: number | null | undefined; group?: boolean }) {
   return (
     <span className="flex items-center gap-3">
-      <span className="text-4xl font-bold sm:text-6xl">{name}</span>
+      <span className="text-[clamp(1.75rem,min(7vw,7vh),3.75rem)] leading-tight font-bold">{name}</span>
       {rank && (
         <span className="rounded-lg bg-white/15 px-2.5 py-1 text-xl font-bold text-white/85">
           {group ? "G" : "R"}
