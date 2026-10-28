@@ -28,6 +28,29 @@ export function noHandicap(raceTo: number): MatchHandicap {
   return { handicap1: 0, handicap2: 0, target1: raceTo, target2: raceTo };
 }
 
+/** Most ranks / handicap groups the pairing table covers. */
+export const MAX_MATRIX_RANKS = 8;
+
+/**
+ * Optional start for each pairing of ranks, e.g. { "1-2": 1, "1-3": 3, "2-3": 1 }, for
+ * starts that don't depend only on the gap. Ranks outside the table play level.
+ */
+export type StartMatrix = Record<string, number>;
+
+export const matrixKey = (a: number, b: number) => `${Math.min(a, b)}-${Math.max(a, b)}`;
+
+export function parseStartMatrix(value: unknown): StartMatrix | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const out: StartMatrix = {};
+  for (const [k, v] of Object.entries(value)) if (/^\d+-\d+$/.test(k) && Number.isInteger(v) && (v as number) > 0) out[k] = v as number;
+  return Object.keys(out).length ? out : null;
+}
+
+/** Highest rank mentioned in a pairing table. */
+export function matrixSize(matrix: StartMatrix | null) {
+  return Math.max(0, ...Object.keys(matrix ?? {}).flatMap((k) => k.split("-").map(Number)));
+}
+
 /** Size of the start for a rank gap, from the tournament's table (0 = none). */
 export function startForGap(starts: number[], gap: number): number {
   if (gap <= 0 || starts.length === 0) return 0;
@@ -37,14 +60,16 @@ export function startForGap(starts: number[], gap: number): number {
 export function computeHandicap(opts: {
   style: string | null | undefined;
   starts: number[];
+  /** When set, starts come from this pairing table instead of the gap table. */
+  matrix?: StartMatrix | null;
   raceTo: number;
   rank1: number | null | undefined;
   rank2: number | null | undefined;
 }): MatchHandicap {
-  const { style, starts, raceTo, rank1, rank2 } = opts;
+  const { style, starts, matrix, raceTo, rank1, rank2 } = opts;
   const none = noHandicap(raceTo);
-  if (!style || !(style in HANDICAP_STYLES) || !rank1 || !rank2) return none;
-  const start = startForGap(starts, Math.abs(rank1 - rank2));
+  if (!style || !(style in HANDICAP_STYLES) || !rank1 || !rank2 || rank1 === rank2) return none;
+  const start = matrix ? Math.max(0, matrix[matrixKey(rank1, rank2)] ?? 0) : startForGap(starts, Math.abs(rank1 - rank2));
   if (start === 0) return none;
 
   const stronger: 1 | 2 = rank1 < rank2 ? 1 : 2;
@@ -105,4 +130,20 @@ export function parseStartTable(get: (key: string) => string | undefined): numbe
   const filled = fillBlankStarts(values);
   while (filled.length > 1 && filled.at(-1) === filled.at(-2)) filled.pop();
   return filled.every((v) => v === 0) ? [] : filled;
+}
+
+/** Parse the settings form's pairing table ("pair-1-2", …) for ranks 1..size. */
+export function parseMatrixForm(size: number, get: (key: string) => string | undefined): StartMatrix | null {
+  if (!Number.isInteger(size) || size < 2 || size > MAX_MATRIX_RANKS) throw new Error(`The pairing table covers 2–${MAX_MATRIX_RANKS} ranks`);
+  const out: StartMatrix = {};
+  for (let a = 1; a <= size; a++) {
+    for (let b = a + 1; b <= size; b++) {
+      const raw = get(`pair-${a}-${b}`)?.trim();
+      if (!raw) continue;
+      const n = Number(raw);
+      if (!Number.isInteger(n) || n < 0 || n > 20) throw new Error(`Start for ${a} v ${b} must be 0–20`);
+      if (n > 0) out[matrixKey(a, b)] = n;
+    }
+  }
+  return Object.keys(out).length ? out : null;
 }

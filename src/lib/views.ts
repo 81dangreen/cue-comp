@@ -1,15 +1,46 @@
 // Derived data for rendering a fully loaded tournament (no extra queries).
-import { computeStandings } from "./standings";
+import { computeStandings, unresolvedTies } from "./standings";
 import { eliminationPlacings } from "./results";
 import { roundLabel } from "./bracket";
+import { describeFormat, majority } from "./match-format";
 import type { MatchWithTable, TournamentFull } from "./queries";
 
+/** Group tables with the tournament's points and tiebreakers, plus any ties a shootout must settle. */
 export function groupsWithStandings(t: TournamentFull) {
+  const rules = {
+    win: t.pointsWin,
+    draw: t.pointsDraw,
+    loss: t.pointsLoss,
+    tiebreakers: t.tiebreakers,
+    shootout: new Map(t.entries.map((e) => [e.id, e.tiebreak])),
+  };
   return t.groups.map((g) => {
     const entryIds = t.entries.filter((e) => e.groupId === g.id).map((e) => e.id);
     const matches = t.matches.filter((m) => m.groupId === g.id);
-    return { group: g, matches, rows: computeStandings(entryIds, matches) };
+    const rows = computeStandings(entryIds, matches, rules);
+    const complete = matches.length > 0 && matches.every((m) => m.status === "COMPLETED" || m.status === "VOID");
+    const shootouts = complete && t.tiebreakers.includes("SHOOTOUT") ? unresolvedTies(rows) : [];
+    return { group: g, matches, rows, complete, shootouts };
   });
+}
+
+/** How a match is won, for card headers: "Race to 5", "First to 6" or "10 frames". */
+export function raceText(t: { matchFrames: string[]; groupFinish: string; koFinish: string }) {
+  return (m: { raceTo: number; bracket: string }) => {
+    if (!t.matchFrames.length) return `Race to ${m.raceTo}`;
+    const finish = m.bracket === "GROUP" ? t.groupFinish : t.koFinish;
+    return finish === "ALL" ? `${t.matchFrames.length} frames` : `First to ${majority(t.matchFrames.length)}`;
+  };
+}
+
+/** The tournament's match length for headers and fact lists. */
+export function formatSummary(t: TournamentFull) {
+  if (!t.matchFrames.length) return t.raceToFinal ? `Race to ${t.raceTo} (final ${t.raceToFinal})` : `Race to ${t.raceTo}`;
+  const group = describeFormat(t.matchFrames, t.groupFinish);
+  if (t.format === "SINGLE_ELIM" || t.format === "DOUBLE_ELIM") return describeFormat(t.matchFrames, t.koFinish);
+  return t.format === "GROUPS_KO" && t.koFinish !== t.groupFinish
+    ? `${group}; knockouts ${t.koFinish === "ALL" ? "all played" : `first to ${majority(t.matchFrames.length)}`}`
+    : group;
 }
 
 /** entryId → final (or current) placing. */
@@ -21,7 +52,11 @@ export function placings(t: TournamentFull): Map<string, number> {
   }
   const result = eliminationPlacings(t.matches);
   if (t.format === "GROUPS_KO" && result.size) {
-    // Non-qualifiers rank below the knockout field, ordered by group position.
+    // The plate field ranks next, by how far they got in the plate.
+    const plate = eliminationPlacings(t.matches, { plate: true });
+    const offset = result.size;
+    for (const [id, place] of plate) result.set(id, offset + place);
+    // Everyone else ranks below, ordered by group position.
     const groups = groupsWithStandings(t);
     let place = result.size + 1;
     const maxRows = Math.max(0, ...groups.map((g) => g.rows.length));
@@ -81,7 +116,7 @@ export function sectionMatches(matches: MatchWithTable[], groups: { id: string; 
     const ms = real.filter((m) => m.groupId === g.id);
     if (ms.length) sections.push({ title: g.name, matches: ms });
   }
-  for (const bracket of ["WINNERS", "LOSERS", "FINAL"]) {
+  for (const bracket of ["WINNERS", "LOSERS", "FINAL", "PLATE"]) {
     const inBracket = real.filter((m) => m.bracket === bracket);
     const rounds = [...new Set(inBracket.map((m) => m.round))].sort((a, b) => a - b);
     for (const r of rounds) {

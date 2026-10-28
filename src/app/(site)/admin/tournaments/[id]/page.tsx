@@ -7,17 +7,20 @@ import {
   generateDrawAction,
   generateKnockoutAction,
   resetDrawAction,
+  setGroupTableAction,
   setRegistration,
+  setShootoutAction,
 } from "@/actions/tournaments";
 import { assignTableAction } from "@/actions/matches";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { ordinal } from "@/lib/results";
 import { entryNames, getTournamentFull, type MatchWithTable } from "@/lib/queries";
-import { matchCounts, matchLabels } from "@/lib/views";
-import { ActionButton } from "@/components/forms";
+import { groupsWithStandings, matchCounts, matchLabels } from "@/lib/views";
+import { ActionButton, ActionForm, SubmitButton } from "@/components/forms";
 import { MatchList } from "@/components/tournament/match-list";
 import { TableSelect } from "@/components/tournament/table-select";
-import { ButtonLink, Card, CardHeader, EmptyState, PageSkeleton } from "@/components/ui";
+import { ButtonLink, Card, CardHeader, EmptyState, PageSkeleton, Select } from "@/components/ui";
 
 export default function ControlRoomPage({ params }: PageProps<"/admin/tournaments/[id]">) {
   return (
@@ -43,6 +46,10 @@ async function ControlRoom({ params }: { params: PageProps<"/admin/tournaments/[
   const koMatches = t.matches.filter((m) => m.bracket !== "GROUP");
   const groupsDone = groupMatches.length > 0 && groupMatches.every((m) => m.status === "COMPLETED" || m.status === "VOID");
   const canKnockout = t.format === "GROUPS_KO" && groupsDone && koMatches.length === 0;
+  const word = t.entryType === "PAIRS" ? "pairs" : "players";
+  const groups = groupsWithStandings(t);
+  const shootouts = koMatches.length === 0 ? groups.flatMap((g) => g.shootouts.map((set) => ({ group: g.group, set }))) : [];
+  const showGroupPanel = groups.length > 0 && koMatches.length === 0 && (t.tablePerGroup || shootouts.length > 0);
 
   // Tables in use anywhere in the organisation, so two events at one venue don't clash.
   const busy = await db.match.findMany({
@@ -75,7 +82,7 @@ async function ControlRoom({ params }: { params: PageProps<"/admin/tournaments/[
       <Card className="p-5">
         <div className="flex flex-wrap items-center gap-6">
           <div>
-            <div className="text-xs text-muted">Confirmed players</div>
+            <div className="text-xs text-muted">Confirmed {word}</div>
             <div className="text-xl font-bold tabular-nums">{confirmed}</div>
           </div>
           {hasDraw && (
@@ -103,7 +110,9 @@ async function ControlRoom({ params }: { params: PageProps<"/admin/tournaments/[
               </ActionButton>
             )}
             {canKnockout && (
-              <ActionButton action={generateKnockoutAction.bind(null, t.id)}>Generate knockout stage</ActionButton>
+              <ActionButton action={generateKnockoutAction.bind(null, t.id)} disabled={shootouts.length > 0}>
+                {t.plateQualifiers ? "Generate knockout & plate" : "Generate knockout stage"}
+              </ActionButton>
             )}
             {tables.length > 0 && (
               <ActionButton
@@ -138,10 +147,61 @@ async function ControlRoom({ params }: { params: PageProps<"/admin/tournaments/[
         )}
       </Card>
 
+      {showGroupPanel && (
+        <Card>
+          <CardHeader
+            title="Group stage"
+            subtitle={t.tablePerGroup ? "Each group plays on its own table. Auto-pilot keeps a group's matches there, in order." : undefined}
+          />
+          <div className="divide-y divide-border">
+            {t.tablePerGroup &&
+              tables.length > 0 &&
+              groups.map(({ group }) => (
+                <div key={group.id} className="flex items-center justify-between gap-3 px-5 py-2.5 text-sm">
+                  <span className="font-medium">{group.name}</span>
+                  <TableSelect
+                    action={setGroupTableAction.bind(null, t.id, group.id)}
+                    tables={tables.map((tb) => ({ ...tb, busy: false }))}
+                    value={group.tableId}
+                  />
+                </div>
+              ))}
+            {shootouts.map(({ group, set }) => (
+              <ActionForm
+                key={set.map((r) => r.entryId).join()}
+                action={setShootoutAction.bind(null, t.id)}
+                className="flex flex-wrap items-end gap-4 bg-warn/5 px-5 py-4"
+              >
+                <div className="w-full text-sm">
+                  <span className="font-semibold">{group.name}: shootout needed.</span>{" "}
+                  <span className="text-muted">These are level after every tiebreaker. Enter where each finished in the shootout.</span>
+                </div>
+                {set.map((r) => (
+                  <label key={r.entryId} className="flex items-center gap-2 text-sm">
+                    <span className="font-medium">{names.get(r.entryId)}</span>
+                    <Select name={`place-${r.entryId}`} defaultValue="" required className="w-24 py-1">
+                      <option value="" disabled>
+                        Place
+                      </option>
+                      {set.map((_, i) => (
+                        <option key={i} value={i + 1}>
+                          {ordinal(i + 1)}
+                        </option>
+                      ))}
+                    </Select>
+                  </label>
+                ))}
+                <SubmitButton variant="secondary">Save shootout</SubmitButton>
+              </ActionForm>
+            ))}
+          </div>
+        </Card>
+      )}
+
       {!hasDraw ? (
         <Card>
           <EmptyState title="No draw yet">
-            Add players on the <Link href={`/admin/tournaments/${t.id}/entries`} className="text-accent hover:underline">entries</Link> tab,
+            Add {word} on the <Link href={`/admin/tournaments/${t.id}/entries`} className="text-accent hover:underline">entries</Link> tab,
             then generate the draw.
           </EmptyState>
         </Card>
@@ -157,7 +217,7 @@ async function ControlRoom({ params }: { params: PageProps<"/admin/tournaments/[
               )}
             </Card>
             <Card>
-              <CardHeader title={`Ready to play (${ready.length})`} subtitle="Both players known — assign a table and start" />
+              <CardHeader title={`Ready to play (${ready.length})`} subtitle={`Both ${word === "pairs" ? "pairs" : "players"} known — assign a table and start`} />
               {ready.length ? (
                 <MatchList matches={ready} names={names} labels={labels} linkFor={scoreLink} actions={matchActions} />
               ) : (
@@ -172,7 +232,7 @@ async function ControlRoom({ params }: { params: PageProps<"/admin/tournaments/[
             )}
             {waiting.length > 0 && (
               <Card>
-                <CardHeader title={`Waiting for players (${waiting.length})`} />
+                <CardHeader title={`Waiting for ${word} (${waiting.length})`} />
                 <MatchList matches={waiting} names={names} labels={labels} />
               </Card>
             )}
@@ -191,6 +251,10 @@ async function ControlRoom({ params }: { params: PageProps<"/admin/tournaments/[
                         {current ? (
                           <Link href={scoreLink(current)} className={current.status === "LIVE" ? "text-live" : "text-accent"}>
                             {current.status === "LIVE" ? `Live ${current.score1}–${current.score2}` : "Waiting to start"}
+                          </Link>
+                        ) : groups.some((g) => g.group.tableId === tb.id && !g.complete) ? (
+                          <Link href={`/admin/tournaments/${t.id}/bracket`} className="text-muted">
+                            {groups.find((g) => g.group.tableId === tb.id)!.group.name}
                           </Link>
                         ) : busyIds.has(tb.id) ? (
                           <span className="text-muted">Other event</span>

@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { getCurrentUser } from "@/lib/auth";
 import { TOURNAMENT_STATUS, FORMATS, type Format, type TournamentStatus } from "@/lib/constants";
 import { getTournamentFull } from "@/lib/queries";
+import { formatSummary } from "@/lib/views";
 import { LiveRefresher } from "@/components/live-refresher";
 import { TabNav } from "@/components/tab-nav";
 import { Badge, ButtonLink, Skeleton } from "@/components/ui";
@@ -33,7 +34,8 @@ async function Header({ params }: { params: LayoutProps<"/admin/tournaments/[id]
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <Badge tone={t.status === "IN_PROGRESS" ? "accent" : "neutral"}>{TOURNAMENT_STATUS[t.status as TournamentStatus]}</Badge>
             <Badge>{FORMATS[t.format as Format]}</Badge>
-            <Badge>Race to {t.raceTo}</Badge>
+            {t.entryType === "PAIRS" && <Badge>Pairs</Badge>}
+            <Badge>{formatSummary(t)}</Badge>
             {t.registrationOpen && <Badge tone="accent">Registration open</Badge>}
             <LiveRefresher tournamentId={t.id} />
           </div>
@@ -46,7 +48,7 @@ async function Header({ params }: { params: LayoutProps<"/admin/tournaments/[id]
         <TabNav
           tabs={[
             { href: base, label: "Control room" },
-            { href: `${base}/entries`, label: `Entries (${t.entries.length})` },
+            { href: `${base}/entries`, label: `${t.entryType === "PAIRS" ? "Pairs" : "Entries"} (${t.entries.length})` },
             ...(t.matches.length ? [{ href: `${base}/bracket`, label: "Bracket" }] : []),
             { href: `${base}/settings`, label: "Settings" },
           ]}

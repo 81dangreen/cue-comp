@@ -86,6 +86,18 @@ export function completeMatch(matches: Matches, id: string, winnerSlot: 1 | 2): 
   return changed;
 }
 
+/** Finish a match level (group stages only: a draw can't feed a bracket). */
+export function completeDraw(matches: Matches, id: string): Set<string> {
+  const m = matches.get(id);
+  if (!m) throw new EngineError("Match not found");
+  if (m.status === "COMPLETED" || m.status === "VOID") throw new EngineError("Match is already finished");
+  if (m.winnerToId || m.loserToId) throw new EngineError("A knockout match can't end in a draw");
+  m.winnerId = null;
+  m.status = "COMPLETED";
+  m.completedAt = new Date();
+  return new Set([id]);
+}
+
 function isUntouched(m: EngineMatch) {
   return (m.status === "PENDING" || m.status === "READY") && m.score1 === 0 && m.score2 === 0;
 }

@@ -62,6 +62,7 @@ model Player {
   createdAt      DateTime      @default(now())
   organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   entries        Entry[]
+  partnerEntries Entry[]       @relation("EntryPartner")
   ranks          PlayerRank[]
 
   @@index([lastName, firstName])
@@ -86,6 +87,7 @@ model Table {
   streamUrl        String?
   venue            Venue     @relation(fields: [venueId], references: [id], onDelete: Cascade)
   matches          Match[]
+  groups           Group[]
   // One-time code a tablet enters (or scans) to become this table's scoreboard.
   pairingCode      String?   @unique
   pairingExpiresAt DateTime?
@@ -119,6 +121,25 @@ model Tournament {
   handicapStyle      String?
   // Start per rank gap: [gap 1, gap 2, ...]; the last value covers larger gaps.
   handicapStarts     Int[]        @default([])
+  // Optional start per pairing of ranks, e.g. {"1-2": 1, "1-3": 3}; replaces the gap table when set.
+  handicapMatrix     Json?
+  // SINGLES | PAIRS (an entry is two players).
+  entryType          String       @default("SINGLES")
+  // Frame-list matches (pairs): D = doubles, AA/BB/AB/BA = singles between each pair's Player A/B.
+  // Empty = a plain race to raceTo. See src/lib/match-format.ts.
+  matchFrames        String[]     @default([])
+  groupFinish        String       @default("FIRST_TO") // FIRST_TO | ALL
+  koFinish           String       @default("FIRST_TO") // FIRST_TO | ALL (level knockouts play a doubles decider)
+  lineupMode         String       @default("RANDOM") // RANDOM | PICK_MATCH | PICK_FRAME
+  // Group tables: points per result, then tiebreakers in order (see src/lib/standings.ts).
+  pointsWin          Int          @default(2)
+  pointsDraw         Int          @default(1)
+  pointsLoss         Int          @default(0)
+  tiebreakers        String[]     @default(["FRAME_DIFF", "FRAMES_FOR", "HEAD_TO_HEAD"])
+  // Group finishers after the main qualifiers who go into a plate bracket (per group).
+  plateQualifiers    Int?
+  // Give each group its own table at the venue; auto-pilot keeps the group's matches there.
+  tablePerGroup      Boolean      @default(false)
   createdAt          DateTime     @default(now())
   organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   venue              Venue?       @relation(fields: [venueId], references: [id], onDelete: SetNull)
@@ -133,6 +154,9 @@ model Entry {
   id           String     @id @default(cuid())
   tournamentId String
   playerId     String
+  // Second player of a pair (pairs comps).
+  partnerId    String?
+  teamName     String?
   seed         Int?
   status       String     @default("CONFIRMED") // REGISTERED | CONFIRMED | WITHDRAWN
   groupId      String?
@@ -143,9 +167,12 @@ model Entry {
   // Contact details given when the player registered for this comp, for its organisers.
   contactEmail String?
   contactPhone String?
+  // Shootout order entered by the organiser to split a tie in the group table (lower is better).
+  tiebreak     Int?
   createdAt    DateTime   @default(now())
   tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
   player       Player     @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  partner      Player?    @relation("EntryPartner", fields: [partnerId], references: [id], onDelete: Cascade)
   group        Group?     @relation(fields: [groupId], references: [id], onDelete: SetNull)
 
   @@unique([tournamentId, playerId])
@@ -156,7 +183,10 @@ model Group {
   tournamentId String
   name         String
   index        Int
+  // The group's own table, when the tournament gives each group one.
+  tableId      String?
   tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  table        Table?     @relation(fields: [tableId], references: [id], onDelete: SetNull)
   entries      Entry[]
   matches      Match[]
 }
@@ -193,6 +223,8 @@ model Match {
   handicap2    Int        @default(0)
   target1      Int?
   target2      Int?
+  // Frame-list matches: each pair's Player A and B ({"1":{"A":playerId,"B":playerId},"2":{...}}).
+  lineup       Json?
   completedAt  DateTime?
   updatedAt    DateTime   @updatedAt
   tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
@@ -210,6 +242,9 @@ model Frame {
   number      Int
   winner      Int // 1 or 2
   breakAndRun Boolean  @default(false)
+  // Frame-list matches: who played a singles frame for each side (null in doubles).
+  player1Id   String?
+  player2Id   String?
   createdAt   DateTime @default(now())
   match       Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
 

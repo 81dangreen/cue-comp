@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { getTournamentFull, playerName } from "@/lib/queries";
+import { entryName, getTournamentFull, playerName } from "@/lib/queries";
 import { ordinal } from "@/lib/results";
 import { placings } from "@/lib/views";
 import { Badge, Card, EmptyState, PageSkeleton } from "@/components/ui";
@@ -21,12 +21,12 @@ async function Players({ params }: { params: PageProps<"/t/[slug]/players">["par
   const ranks = placings(t);
   const entries = t.entries
     .filter((e) => e.status !== "WITHDRAWN")
-    .sort((a, b) => (ranks.get(a.id) ?? 999) - (ranks.get(b.id) ?? 999) || playerName(a.player).localeCompare(playerName(b.player)));
+    .sort((a, b) => (ranks.get(a.id) ?? 999) - (ranks.get(b.id) ?? 999) || entryName(a).localeCompare(entryName(b)));
 
   if (!entries.length) {
     return (
       <Card>
-        <EmptyState title="No players have entered yet" />
+        <EmptyState title={t.entryType === "PAIRS" ? "No pairs have entered yet" : "No players have entered yet"} />
       </Card>
     );
   }
@@ -37,11 +37,19 @@ async function Players({ params }: { params: PageProps<"/t/[slug]/players">["par
         {entries.map((e) => (
           <li key={e.id} className="flex items-center gap-3 px-5 py-3">
             <span className="w-12 text-sm text-muted">{ranks.has(e.id) ? ordinal(ranks.get(e.id)!) : ""}</span>
-            <Link href={`/players/${e.player.id}`} className="font-medium hover:text-accent">
-              {playerName(e.player)}
-            </Link>
-            {e.player.nickname && <span className="text-sm text-muted">“{e.player.nickname}”</span>}
-            {t.handicapStyle && e.rank && <Badge tone="accent">Rank {e.rank}</Badge>}
+            {e.teamName && <span className="font-semibold">{e.teamName}</span>}
+            <span className={e.teamName ? "text-sm text-muted" : undefined}>
+              {[e.player, ...(e.partner ? [e.partner] : [])].map((p, i) => (
+                <span key={p.id}>
+                  {i > 0 && " & "}
+                  <Link href={`/players/${p.id}`} className="font-medium hover:text-accent">
+                    {playerName(p)}
+                  </Link>
+                </span>
+              ))}
+            </span>
+            {!e.partner && e.player.nickname && <span className="text-sm text-muted">“{e.player.nickname}”</span>}
+            {t.handicapStyle && e.rank && <Badge tone="accent">{e.partner ? `Group ${e.rank}` : `Rank ${e.rank}`}</Badge>}
             {e.seed && <Badge>Seed {e.seed}</Badge>}
             {e.status === "REGISTERED" && <Badge tone="warn">Awaiting confirmation</Badge>}
           </li>

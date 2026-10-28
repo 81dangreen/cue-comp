@@ -1,14 +1,18 @@
 "use server";
 
 import { requireMatch } from "@/lib/auth";
+import type { Lineup } from "@/lib/match-format";
 import { addFrame, assignTable, setResult, startMatch, undoFrame } from "@/lib/tournament-service";
 import type { ActionResult } from "@/components/forms";
 import { run } from "./util";
 
-export async function addFrameAction(matchId: string, slot: 1 | 2, breakAndRun = false) {
+/** Players named for a frame when pairs pick frame by frame. */
+export type FramePick = { player1Id?: string; player2Id?: string };
+
+export async function addFrameAction(matchId: string, slot: 1 | 2, breakAndRun = false, picked?: FramePick) {
   return run(async () => {
     await requireMatch(matchId);
-    await addFrame(matchId, slot, breakAndRun);
+    await addFrame(matchId, slot, breakAndRun, picked);
   });
 }
 
@@ -19,10 +23,10 @@ export async function undoFrameAction(matchId: string) {
   });
 }
 
-export async function startMatchAction(matchId: string) {
+export async function startMatchAction(matchId: string, breakSlot?: 1 | 2, lineup?: Lineup | null) {
   return run(async () => {
     await requireMatch(matchId);
-    await startMatch(matchId);
+    await startMatch(matchId, breakSlot, lineup);
   });
 }
 

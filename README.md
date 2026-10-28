@@ -83,6 +83,29 @@ the entries when the draw is made, so later rank changes don't alter a comp in p
 the entries page. Each match fixes its handicap when it starts, and the scoreboard and tablets show it. Group tables
 count only racks actually won, not starts. Rules live in `src/lib/handicap.ts`.
 
+## Pairs comps and frame-list matches
+
+Set **Entries → Pairs** in the tournament settings for comps where two players enter together (e.g. scotch doubles).
+Pairs are added on the entries page (from the directory, or new names), with an optional team name and handicap group.
+
+- **Match format**: a plain race (every frame doubles), or a **set list of frames**, each Doubles or a singles frame
+  between each pair's Player A and Player B ("A v A", "B v B", "A v B", "B v A"). The default is 10 frames:
+  D, A v A, B v B, D, B v B, A v A, D, A v A, B v B, D. Every player gets 3 singles and never plays two in a row.
+- **Finish**: first to a majority (6 of 10), or play every frame. In groups a level score is a draw; in knockouts a
+  doubles decider is played. Group and knockout matches can use different finishes.
+- **Order of play**: Player A and B drawn at random when the match starts, chosen by the pairs before the match, or
+  chosen before each singles frame (each player is limited to their share of the singles).
+- **Group tables**: the organiser sets points for a win, draw and loss and orders the tiebreakers (frame difference,
+  frames won, head-to-head mini-table, shootout). With a shootout, the control room asks for its result before the
+  knockout is drawn.
+- **Plate**: finishers below the knockout places (e.g. each 3rd) go into a separate plate bracket.
+- **A table per group**: each group gets its own table and auto-pilot keeps that group's matches on it, in order.
+- **Handicaps**: starts can be set per pairing of groups (1 v 2, 1 v 3, …) instead of per gap.
+
+The tablet shows the match score, a strip of every frame, and big "who won this frame" buttons naming the players.
+Each frame records who played it; the public match page lists them. Rules live in `src/lib/match-format.ts` and
+`src/lib/standings.ts`.
+
 ## Deploying (Render)
 
 The app runs as **one always-on Node server plus Postgres**. Live updates are passed around inside the server process,

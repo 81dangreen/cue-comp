@@ -32,7 +32,8 @@ export function MatchList({
       {matches.map((m) => {
         const n1 = m.entry1Id ? names.get(m.entry1Id) : "TBD";
         const n2 = m.entry2Id ? names.get(m.entry2Id) : "TBD";
-        const done = m.status === "COMPLETED";
+        // A drawn match has no winner to pick out.
+        const done = m.status === "COMPLETED" && !!m.winnerId;
         const href = linkFor?.(m);
         const row = (
           <div className={cx("grid items-center gap-3", labels ? "grid-cols-[9rem_1fr_auto_1fr]" : "grid-cols-[1fr_auto_1fr]")}>

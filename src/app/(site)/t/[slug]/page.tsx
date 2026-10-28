@@ -5,7 +5,7 @@ import { Suspense } from "react";
 import { registerForTournament } from "@/actions/tournaments";
 import { entryNames, getTournamentFull } from "@/lib/queries";
 import { ordinal } from "@/lib/results";
-import { matchCounts, matchLabels, placings } from "@/lib/views";
+import { matchCounts, matchLabels, placings, raceText } from "@/lib/views";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { MatchCard } from "@/components/tournament/match-card";
 import { Card, CardHeader, EmptyState, Field, Input, PageSkeleton, SectionTitle } from "@/components/ui";
@@ -43,6 +43,9 @@ async function Overview({ params }: { params: PageProps<"/t/[slug]">["params"] }
   const counts = matchCounts(t);
   const ranks = t.status === "COMPLETED" ? placings(t) : new Map<string, number>();
   const podium = [...ranks.entries()].filter(([, r]) => r <= 4).sort((a, b) => a[1] - b[1]);
+  const card = (m: (typeof t.matches)[number]) => (
+    <MatchCard key={m.id} match={m} names={names} label={labels.get(m.id)} fluid raceText={raceText(t)} href={`/t/${t.slug}/matches/${m.id}`} />
+  );
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
@@ -64,33 +67,21 @@ async function Overview({ params }: { params: PageProps<"/t/[slug]">["params"] }
         {live.length > 0 && (
           <section>
             <SectionTitle>Live now</SectionTitle>
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {live.map((m) => (
-                <MatchCard key={m.id} match={m} names={names} label={labels.get(m.id)} fluid />
-              ))}
-            </div>
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{live.map(card)}</div>
           </section>
         )}
 
         {upNext.length > 0 && (
           <section>
             <SectionTitle>Up next</SectionTitle>
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {upNext.map((m) => (
-                <MatchCard key={m.id} match={m} names={names} label={labels.get(m.id)} fluid />
-              ))}
-            </div>
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{upNext.map(card)}</div>
           </section>
         )}
 
         {recent.length > 0 && (
           <section>
             <SectionTitle>Latest results</SectionTitle>
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {recent.map((m) => (
-                <MatchCard key={m.id} match={m} names={names} label={labels.get(m.id)} fluid />
-              ))}
-            </div>
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{recent.map(card)}</div>
           </section>
         )}
 

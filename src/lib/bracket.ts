@@ -5,7 +5,8 @@
 // a slot that can never be filled is "empty", and a match with one empty slot
 // is a bye that auto-advances whoever arrives in the other slot.
 
-export type Bracket = "WINNERS" | "LOSERS" | "FINAL" | "GROUP";
+// PLATE: a second single-elimination bracket for group finishers below the main qualifiers.
+export type Bracket = "WINNERS" | "LOSERS" | "FINAL" | "GROUP" | "PLATE";
 
 export type SlotSource =
   | { type: "entry"; entryId: string | null }
@@ -70,7 +71,12 @@ function link(specs: Map<string, MatchSpec>, from: string, kind: "winner" | "los
  * Winners-bracket skeleton shared by single and double elimination.
  * `entryIds` must already be in seed order (index 0 = top seed).
  */
-function buildWinnersBracket(entryIds: string[], race: RaceOptions, finalIsLast: boolean) {
+function buildWinnersBracket(
+  entryIds: string[],
+  race: RaceOptions,
+  finalIsLast: boolean,
+  { bracket = "WINNERS", prefix = "W" }: { bracket?: Bracket; prefix?: string } = {},
+) {
   const size = Math.max(2, nextPowerOfTwo(entryIds.length));
   const rounds = Math.log2(size);
   const specs = new Map<string, MatchSpec>();
@@ -79,10 +85,10 @@ function buildWinnersBracket(entryIds: string[], race: RaceOptions, finalIsLast:
   for (let r = 1; r <= rounds; r++) {
     const count = size / 2 ** r;
     for (let p = 1; p <= count; p++) {
-      const key = `W${r}-${p}`;
+      const key = `${prefix}${r}-${p}`;
       specs.set(key, {
         key,
-        bracket: "WINNERS",
+        bracket,
         round: r,
         position: p,
         code: key,
@@ -102,14 +108,14 @@ function buildWinnersBracket(entryIds: string[], race: RaceOptions, finalIsLast:
   for (let r = 1; r < rounds; r++) {
     const count = size / 2 ** r;
     for (let p = 1; p <= count; p++) {
-      link(specs, `W${r}-${p}`, "winner", `W${r + 1}-${Math.ceil(p / 2)}`, p % 2 === 1 ? 1 : 2);
+      link(specs, `${prefix}${r}-${p}`, "winner", `${prefix}${r + 1}-${Math.ceil(p / 2)}`, p % 2 === 1 ? 1 : 2);
     }
   }
   return { specs, size, rounds };
 }
 
-export function singleElimination(entryIds: string[], race: RaceOptions): MatchSpec[] {
-  const { specs } = buildWinnersBracket(entryIds, race, true);
+export function singleElimination(entryIds: string[], race: RaceOptions, opts: { plate?: boolean } = {}): MatchSpec[] {
+  const { specs } = buildWinnersBracket(entryIds, race, true, opts.plate ? { bracket: "PLATE", prefix: "P" } : {});
   return [...specs.values()];
 }
 
@@ -252,9 +258,9 @@ export function roundRobinGroup(groupKey: string, label: string, entryIds: strin
  * all group winners first, then all runners-up, etc. With standard seeding that
  * pairs A1 v D2, B1 v C2, C1 v B2, D1 v A2.
  */
-export function orderQualifiers(standingsByGroup: string[][], perGroup: number): string[] {
+export function orderQualifiers(standingsByGroup: string[][], perGroup: number, fromPlace = 0): string[] {
   const ordered: string[] = [];
-  for (let place = 0; place < perGroup; place++) {
+  for (let place = fromPlace; place < fromPlace + perGroup; place++) {
     for (const group of standingsByGroup) {
       if (group[place]) ordered.push(group[place]);
     }
@@ -343,6 +349,7 @@ export function roundLabel(
   if (bracket === "FINAL") return round === 1 ? "Grand Final" : "Grand Final (reset)";
   if (bracket === "LOSERS") return totalRounds === round ? "Losers Final" : `Losers Round ${round}`;
   if (bracket === "GROUP") return `Round ${round}`;
+  if (bracket === "PLATE") return `Plate ${roundLabel("WINNERS", round, totalRounds)}`;
   const fromEnd = totalRounds - round;
   // In double elimination the last winners-bracket match isn't the final: the grand final is.
   if (fromEnd === 0) return opts.doubleElim ? "Winners Final" : "Final";

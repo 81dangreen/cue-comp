@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { db } from "@/lib/db";
-import { playerName } from "@/lib/queries";
+import { entryName } from "@/lib/queries";
 import { LiveRefresher } from "@/components/live-refresher";
 
 export const metadata: Metadata = { title: "Overlay" };
@@ -32,12 +32,12 @@ async function Overlay({ params }: { params: PageProps<"/overlay/[tableId]">["pa
   const entries = match
     ? await db.entry.findMany({
         where: { id: { in: [match.entry1Id, match.entry2Id].filter((x): x is string => !!x) } },
-        include: { player: true },
+        include: { player: true, partner: true },
       })
     : [];
   const name = (id: string | null) => {
     const e = entries.find((x) => x.id === id);
-    return e ? playerName(e.player) : "";
+    return e ? entryName(e) : "";
   };
 
   return (

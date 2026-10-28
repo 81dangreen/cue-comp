@@ -2,9 +2,11 @@
 
 import { redirect } from "next/navigation";
 import { forgetDevice, pairDevice, requireDeviceMatch } from "@/lib/device";
+import type { Lineup } from "@/lib/match-format";
 import { clientIp, limitAttempts } from "@/lib/rate-limit";
 import { addFrame, startMatch, undoFrame } from "@/lib/tournament-service";
 import type { ActionResult } from "@/components/forms";
+import type { FramePick } from "./matches";
 import { run } from "./util";
 
 // Actions used by a paired table tablet. Each one re-checks that the match is
@@ -25,18 +27,18 @@ export async function unpairTabletAction() {
   redirect("/table");
 }
 
-export async function tableStartMatchAction(matchId: string, breakSlot: 1 | 2) {
+export async function tableStartMatchAction(matchId: string, breakSlot: 1 | 2, lineup?: Lineup | null) {
   return run(async () => {
     await requireDeviceMatch(matchId);
-    await startMatch(matchId, breakSlot);
+    await startMatch(matchId, breakSlot, lineup);
   });
 }
 
-export async function tableAddFrameAction(matchId: string, slot: 1 | 2, breakAndRun = false) {
+export async function tableAddFrameAction(matchId: string, slot: 1 | 2, breakAndRun = false, picked?: FramePick) {
   return run(async () => {
     const { match } = await requireDeviceMatch(matchId);
     if (match.status !== "LIVE") throw new Error("Start the match first");
-    await addFrame(matchId, slot, breakAndRun);
+    await addFrame(matchId, slot, breakAndRun, picked);
   });
 }
 

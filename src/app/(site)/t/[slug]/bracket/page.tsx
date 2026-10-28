@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { entryNames, getTournamentFull } from "@/lib/queries";
-import { groupsWithStandings } from "@/lib/views";
+import { groupsWithStandings, raceText } from "@/lib/views";
 import { BracketView } from "@/components/tournament/bracket";
 import { GroupTable } from "@/components/tournament/group-tables";
 import { Card, EmptyState, PageSkeleton } from "@/components/ui";
@@ -34,13 +34,18 @@ async function Bracket({ params }: { params: PageProps<"/t/[slug]/bracket">["par
     <div className="space-y-8">
       {groups.length > 0 && (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {groups.map(({ group, rows }) => (
+          {groups.map(({ group, rows, shootouts }) => (
             <GroupTable
               key={group.id}
               name={group.name}
               rows={rows}
               names={names}
               qualifiers={t.format === "GROUPS_KO" ? t.qualifiersPerGroup ?? 2 : 0}
+              plate={t.format === "GROUPS_KO" ? t.plateQualifiers ?? 0 : 0}
+              showDraws={t.matchFrames.length > 0}
+              entity={t.entryType === "PAIRS" ? "Pair" : "Player"}
+              tableName={group.table?.name}
+              shootoutNeeded={shootouts.length > 0}
             />
           ))}
         </div>
@@ -48,7 +53,7 @@ async function Bracket({ params }: { params: PageProps<"/t/[slug]/bracket">["par
       {ko.length > 0 && (
         <div>
           {groups.length > 0 && <h2 className="mb-4 text-lg font-semibold">Knockout</h2>}
-          <BracketView matches={ko} names={names} />
+          <BracketView matches={ko} names={names} raceText={raceText(t)} linkFor={(m) => (m.isBye || m.status === "VOID" ? undefined : `/t/${t.slug}/matches/${m.id}`)} />
         </div>
       )}
       {groups.length > 0 && !ko.length && t.format === "GROUPS_KO" && (

@@ -2,26 +2,79 @@
 
 import { randomBytes } from "node:crypto";
 import { redirect } from "next/navigation";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireTournament, requireUser } from "@/lib/auth";
 import { DISCIPLINES, FORMATS } from "@/lib/constants";
 import { describeMatches, sameNamePlayers } from "@/lib/directory";
-import { HANDICAP_STYLES, parseStartTable, type HandicapStyle } from "@/lib/handicap";
+import { HANDICAP_STYLES, parseMatrixForm, parseStartTable, type HandicapStyle } from "@/lib/handicap";
+import { FINISH_RULES, isFrameKind, LINEUP_MODES, majority, MAX_FRAMES } from "@/lib/match-format";
+import { DEFAULT_TIEBREAKERS, TIEBREAKERS } from "@/lib/standings";
 import { publish } from "@/lib/events";
 import {
   autoAssignTables,
   generateDraw,
   generateKnockout,
   resetDraw,
+  setGroupTable,
+  setShootout,
 } from "@/lib/tournament-service";
 import type { ActionResult } from "@/components/forms";
 import { formObject, optionalInt, run, slugify } from "./util";
 
-/** Handicap style and start table from the settings form. A style with no starts is treated as level play. */
+/**
+ * Handicap style and starts from the settings form: a table per rank gap, or per pairing of ranks.
+ * A style with no starts is treated as level play.
+ */
 function handicapSettings(style: HandicapStyle | undefined, fields: Record<string, string>) {
-  const starts = style ? parseStartTable((key) => fields[key]) : [];
-  return starts.length ? { handicapStyle: style!, handicapStarts: starts } : { handicapStyle: null, handicapStarts: [] };
+  const level = { handicapStyle: null, handicapStarts: [] as number[], handicapMatrix: Prisma.DbNull };
+  if (!style) return level;
+  if (fields.handicapMode === "PAIRS") {
+    const matrix = parseMatrixForm(Number(fields.matrixSize), (key) => fields[key]);
+    return matrix ? { handicapStyle: style, handicapStarts: [] as number[], handicapMatrix: matrix } : level;
+  }
+  const starts = parseStartTable((key) => fields[key]);
+  return starts.length ? { handicapStyle: style, handicapStarts: starts, handicapMatrix: Prisma.DbNull } : level;
+}
+
+/** Match format, group-table rules and plate from the settings form. */
+function structureSettings(fields: Record<string, string>, entryType: string) {
+  const useFrames = entryType === "PAIRS" && fields.matchFormat === "FRAMES";
+  const frames = useFrames ? (fields.matchFrames ?? "").split(",").map((f) => f.trim()).filter(Boolean) : [];
+  if (frames.some((f) => !isFrameKind(f))) throw new Error("Unknown frame type in the match format");
+  if (useFrames && frames.length < 1) throw new Error("Add at least one frame to the match format");
+  if (frames.length > MAX_FRAMES) throw new Error(`A match can have at most ${MAX_FRAMES} frames`);
+  // The group-table fields are only on the form for formats with groups; keep the defaults otherwise.
+  const tiebreakers = fields.groupRules
+    ? [1, 2, 3, 4]
+        .map((i) => fields[`tiebreak-${i}`])
+        .filter((v): v is keyof typeof TIEBREAKERS => !!v && v in TIEBREAKERS)
+        .filter((v, i, all) => all.indexOf(v) === i)
+    : DEFAULT_TIEBREAKERS;
+  const points = (key: string, fallback: number) => {
+    const n = fields[key] === undefined ? fallback : Number(fields[key]);
+    if (!Number.isInteger(n) || n < -10 || n > 10) throw new Error("Points must be whole numbers from -10 to 10");
+    return n;
+  };
+  const plate = fields.plateQualifiers ? Number(fields.plateQualifiers) : 0;
+  if (!Number.isInteger(plate) || plate < 0 || plate > 8) throw new Error("Plate places must be 0–8");
+  const pick = <T extends object>(value: string | undefined, options: T, fallback: keyof T & string) =>
+    value && value in options ? value : fallback;
+  return {
+    matchFrames: frames,
+    groupFinish: pick(fields.groupFinish, FINISH_RULES, "FIRST_TO"),
+    koFinish: pick(fields.koFinish, FINISH_RULES, "FIRST_TO"),
+    lineupMode: pick(fields.lineupMode, LINEUP_MODES, "RANDOM"),
+    pointsWin: points("pointsWin", 2),
+    pointsDraw: points("pointsDraw", 1),
+    pointsLoss: points("pointsLoss", 0),
+    tiebreakers,
+    plateQualifiers: plate || null,
+    tablePerGroup: fields.tablePerGroup === "on",
+    // A frame-list match is won by a majority of its frames.
+    ...(frames.length ? { raceTo: majority(frames.length), raceToFinal: undefined } : {}),
+  };
 }
 
 const tournamentSchema = z
@@ -30,7 +83,8 @@ const tournamentSchema = z
     description: z.string().max(4000).optional(),
     discipline: z.enum(Object.keys(DISCIPLINES) as [keyof typeof DISCIPLINES]),
     format: z.enum(Object.keys(FORMATS) as [keyof typeof FORMATS]),
-    raceTo: z.coerce.number().int().min(1, "Race must be at least 1").max(50),
+    entryType: z.enum(["SINGLES", "PAIRS"]).default("SINGLES"),
+    raceTo: z.coerce.number().int().min(1, "Race must be at least 1").max(50).default(5),
     raceToFinal: optionalInt,
     maxEntries: optionalInt,
     entryFee: z.string().max(40).optional(),
@@ -61,13 +115,13 @@ export async function createTournament(_prev: ActionResult, formData: FormData):
   const fields = formObject(formData);
   const parsed = tournamentSchema.safeParse(fields);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
-  let handicap;
+  let settings;
   try {
-    handicap = handicapSettings(parsed.data.handicapStyle, fields);
+    settings = { ...handicapSettings(parsed.data.handicapStyle, fields), ...structureSettings(fields, parsed.data.entryType) };
   } catch (e) {
     return { error: (e as Error).message };
   }
-  const data = { ...parsed.data, ...handicap };
+  const data = { ...parsed.data, ...settings };
   const venueId = await checkVenue(user.organizationId, data.venueId);
   const slug = `${slugify(data.name) || "tournament"}-${randomBytes(3).toString("hex")}`;
   const t = await db.tournament.create({
@@ -81,13 +135,24 @@ export async function updateTournament(tournamentId: string, _prev: ActionResult
     const { user, tournament } = await requireTournament(tournamentId);
     const fields = formObject(formData);
     const parsed = tournamentSchema.parse(fields);
-    const data = { ...parsed, ...handicapSettings(parsed.handicapStyle, fields) };
+    const data = { ...parsed, ...handicapSettings(parsed.handicapStyle, fields), ...structureSettings(fields, parsed.entryType) };
     const hasDraw = (await db.match.count({ where: { tournamentId } })) > 0;
-    if (hasDraw && (data.format !== tournament.format || data.raceTo !== tournament.raceTo)) {
-      throw new Error("Reset the draw before changing the format or race length");
+    if (data.entryType !== tournament.entryType && (await db.entry.count({ where: { tournamentId } }))) {
+      throw new Error("Remove the entries before switching between singles and pairs");
     }
+    const sameFormat =
+      data.format === tournament.format &&
+      data.raceTo === tournament.raceTo &&
+      data.matchFrames.join() === tournament.matchFrames.join() &&
+      data.groupFinish === tournament.groupFinish &&
+      data.koFinish === tournament.koFinish &&
+      data.lineupMode === tournament.lineupMode;
+    if (hasDraw && !sameFormat) throw new Error("Reset the draw before changing the format or match length");
+    const matrixJson = (m: unknown) => JSON.stringify(m === Prisma.DbNull ? null : (m ?? null));
     const sameHandicap =
-      data.handicapStyle === tournament.handicapStyle && data.handicapStarts.join() === tournament.handicapStarts.join();
+      data.handicapStyle === tournament.handicapStyle &&
+      data.handicapStarts.join() === tournament.handicapStarts.join() &&
+      matrixJson(data.handicapMatrix) === matrixJson(tournament.handicapMatrix);
     if (hasDraw && !sameHandicap) throw new Error("Reset the draw before changing the handicap");
     const venueId = await checkVenue(user.organizationId, data.venueId);
     await db.tournament.update({
@@ -119,6 +184,7 @@ export async function setRegistration(tournamentId: string, open: boolean) {
   return run(async () => {
     const { tournament } = await requireTournament(tournamentId);
     if (open && tournament.status === "IN_PROGRESS") throw new Error("The draw has already been made");
+    if (open && tournament.entryType === "PAIRS") throw new Error("Pairs are entered by the organiser, so online registration isn't available");
     await db.tournament.update({
       where: { id: tournamentId },
       data: {
@@ -141,6 +207,7 @@ export async function addEntries(tournamentId: string, _prev: ActionResult, form
   return run(async () => {
     const { user, tournament } = await requireTournament(tournamentId);
     await assertDrawNotMade(tournamentId);
+    if (tournament.entryType === "PAIRS") throw new Error("This is a pairs comp: add pairs instead");
     const ids = formData.getAll("playerId").map(String);
     const newName = String(formData.get("newPlayer") ?? "").trim();
     if (newName) {
@@ -169,6 +236,51 @@ export async function addEntries(tournamentId: string, _prev: ActionResult, form
     }
     publish(tournamentId);
     return `Added ${players.length} player${players.length === 1 ? "" : "s"}`;
+  });
+}
+
+/** Find a directory player by id, or add a new one typed by name (refusing a name already listed). */
+async function pairMember(organizationId: string, id: string, name: string) {
+  if (id) {
+    const p = await db.player.findUnique({ where: { id } });
+    if (!p) throw new Error("Player not found");
+    return p;
+  }
+  const [firstName, ...rest] = name.split(/\s+/);
+  if (!firstName || !rest.length) throw new Error("Choose both players, or type a new player's first and last name");
+  const matches = await sameNamePlayers(firstName, rest.join(" "));
+  if (matches.length) throw new Error(`${name} is already in the player directory (${describeMatches(matches)}). Search for them instead.`);
+  return db.player.create({ data: { firstName, lastName: rest.join(" "), organizationId } });
+}
+
+/** Pairs comps: enter two players as one entry, optionally with a team name and handicap group. */
+export async function addPair(tournamentId: string, _prev: ActionResult, formData: FormData) {
+  return run(async () => {
+    const { user, tournament } = await requireTournament(tournamentId);
+    await assertDrawNotMade(tournamentId);
+    if (tournament.entryType !== "PAIRS") throw new Error("This isn't a pairs comp");
+    const field = (key: string) => String(formData.get(key) ?? "").trim();
+    const rankRaw = field("rank");
+    const rank = rankRaw ? Number(rankRaw) : null;
+    if (rank !== null && (!Number.isInteger(rank) || rank < 1)) throw new Error("Handicap groups are whole numbers from 1");
+    if (!field("player1Id") && !field("newPlayer1")) throw new Error("Choose the first player");
+    if (!field("player2Id") && !field("newPlayer2")) throw new Error("Choose the second player");
+    if (field("player1Id") && field("player1Id") === field("player2Id")) throw new Error("Choose two different players");
+    const current = await db.entry.findMany({ where: { tournamentId, status: { not: "WITHDRAWN" } } });
+    if (tournament.maxEntries && current.length >= tournament.maxEntries) {
+      throw new Error(`This tournament is limited to ${tournament.maxEntries} pairs`);
+    }
+    const entered = new Set(current.flatMap((e) => [e.playerId, e.partnerId]));
+    for (const id of [field("player1Id"), field("player2Id")]) {
+      if (id && entered.has(id)) throw new Error("One of those players is already in a pair in this comp");
+    }
+    const p1 = await pairMember(user.organizationId, field("player1Id"), field("newPlayer1"));
+    const p2 = await pairMember(user.organizationId, field("player2Id"), field("newPlayer2"));
+    await db.entry.create({
+      data: { tournamentId, playerId: p1.id, partnerId: p2.id, teamName: field("teamName") || null, rank, status: "CONFIRMED" },
+    });
+    publish(tournamentId);
+    return `Added ${p1.firstName} ${p1.lastName} & ${p2.firstName} ${p2.lastName}`;
   });
 }
 
@@ -213,8 +325,8 @@ export async function saveEntries(tournamentId: string, _prev: ActionResult, for
         const rank = raw ? Number(raw) : null;
         if (rank !== null && (!Number.isInteger(rank) || rank < 1)) throw new Error("Ranks must be whole numbers from 1");
         // Before the draw, only a comp-only override is stored; an unchanged rank keeps following the
-        // directory (so central re-ranking still applies) until the draw freezes it.
-        const override = drawMade || rank !== directoryRanks.get(e.playerId) ? rank : null;
+        // directory (so central re-ranking still applies) until the draw freezes it. Pairs' groups are always set here.
+        const override = drawMade || e.partnerId || rank !== directoryRanks.get(e.playerId) ? rank : null;
         await db.entry.update({ where: { id: e.id }, data: { rank: override } });
       }
     }
@@ -259,6 +371,33 @@ export async function generateKnockoutAction(tournamentId: string) {
   });
 }
 
+/** Record a shootout between entries level in a group table: `place-<entryId>` = 1st, 2nd, … */
+export async function setShootoutAction(tournamentId: string, _prev: ActionResult, formData: FormData) {
+  return run(async () => {
+    await requireTournament(tournamentId);
+    const places = [...formData.entries()]
+      .filter(([key]) => key.startsWith("place-"))
+      .map(([key, value]) => ({ id: key.slice(6), place: Number(value) }));
+    if (places.some((p) => !Number.isInteger(p.place) || p.place < 1)) throw new Error("Give each tied entry a finishing place");
+    if (new Set(places.map((p) => p.place)).size !== places.length) throw new Error("Each place can only be used once");
+    await setShootout(tournamentId, places.sort((a, b) => a.place - b.place).map((p) => p.id));
+    return "Shootout result saved";
+  });
+}
+
+export async function setGroupTableAction(tournamentId: string, groupId: string, _prev: ActionResult, formData: FormData) {
+  return run(async () => {
+    const { tournament } = await requireTournament(tournamentId);
+    const group = await db.group.findFirst({ where: { id: groupId, tournamentId } });
+    if (!group) throw new Error("Group not found");
+    const tableId = String(formData.get("tableId") ?? "") || null;
+    if (tableId && !(await db.table.findFirst({ where: { id: tableId, venueId: tournament.venueId ?? "" } }))) {
+      throw new Error("That table isn't at this tournament's venue");
+    }
+    await setGroupTable(groupId, tableId);
+  });
+}
+
 export async function autoAssignTablesAction(tournamentId: string) {
   return run(async () => {
     await requireTournament(tournamentId);
@@ -279,7 +418,7 @@ export async function registerForTournament(slug: string, _prev: ActionResult, f
   const parsed = registrationSchema.safeParse(formObject(formData));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const t = await db.tournament.findUnique({ where: { slug } });
-  if (!t || !t.isPublic || !t.registrationOpen) return { error: "Registration is closed" };
+  if (!t || !t.isPublic || !t.registrationOpen || t.entryType === "PAIRS") return { error: "Registration is closed" };
   const count = await db.entry.count({ where: { tournamentId: t.id, status: { not: "WITHDRAWN" } } });
   if (t.maxEntries && count >= t.maxEntries) return { error: "This tournament is full" };
 

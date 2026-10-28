@@ -1,16 +1,19 @@
 import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
-import { tableAddFrameAction, tableUndoFrameAction, unpairTabletAction } from "@/actions/table";
+import { tableAddFrameAction, tableStartMatchAction, tableUndoFrameAction, unpairTabletAction } from "@/actions/table";
 import { APP_NAME } from "@/lib/brand";
 import { roundLabel } from "@/lib/bracket";
 import { db } from "@/lib/db";
 import { getDevice } from "@/lib/device";
+import { frameMatchData } from "@/lib/frame-match";
 import { describeHandicap } from "@/lib/handicap";
 import { matchHandicap } from "@/lib/tournament-service";
-import { playerName } from "@/lib/queries";
+import { entryName } from "@/lib/queries";
+import { raceText } from "@/lib/views";
 import { ConfirmButton } from "@/components/forms";
 import { LiveRefresher } from "@/components/live-refresher";
 import { LogoMark } from "@/components/logo";
+import { FrameMatchStart, FrameScoreboard } from "@/components/scoring/frame-scoreboard";
 import { Scoreboard } from "@/components/scoring/scoreboard";
 import { Clock } from "@/components/table/clock";
 import { PairForm } from "@/components/table/pair-form";
@@ -63,6 +66,7 @@ async function TableScreen({ searchParams }: { searchParams: PageProps<"/table">
   const rank = (id: string | null | undefined) => (current?.tournament.handicapStyle && id ? names.get(id)?.rank : null);
   const handicap = current ? await matchHandicap(current) : null;
   const handicapNote = current && handicap ? describeHandicap(handicap, name(current.entry1Id), name(current.entry2Id)) : null;
+  const frameMatch = current ? await frameMatchData(current) : null;
 
   const chrome = (
     <>
@@ -70,6 +74,22 @@ async function TableScreen({ searchParams }: { searchParams: PageProps<"/table">
       <WakeLock />
     </>
   );
+
+  if (current?.status === "LIVE" && frameMatch) {
+    return (
+      <>
+        {chrome}
+        <FrameScoreboard
+          {...frameMatch}
+          roundName={await matchRoundName(current)}
+          tableName={device.table.name}
+          confirmFinish
+          addFrame={tableAddFrameAction.bind(null, current.id)}
+          undo={tableUndoFrameAction.bind(null, current.id)}
+        />
+      </>
+    );
+  }
 
   if (current?.status === "LIVE") {
     return (
@@ -108,11 +128,11 @@ async function TableScreen({ searchParams }: { searchParams: PageProps<"/table">
     <div className="rounded-2xl border border-white/10 bg-white/5 px-6 py-4 text-center">
       <p className="text-xs font-semibold tracking-wide text-white/50 uppercase">Last result on this table</p>
       <p className="mt-2 text-xl">
-        <span className={last.winnerId === last.entry1Id ? "font-bold" : "text-white/60"}>{name(last.entry1Id)}</span>
+        <span className={!last.winnerId || last.winnerId === last.entry1Id ? "font-bold" : "text-white/60"}>{name(last.entry1Id)}</span>
         <span className="mx-3 font-black tabular-nums">
           {last.score1} – {last.score2}
         </span>
-        <span className={last.winnerId === last.entry2Id ? "font-bold" : "text-white/60"}>{name(last.entry2Id)}</span>
+        <span className={!last.winnerId || last.winnerId === last.entry2Id ? "font-bold" : "text-white/60"}>{name(last.entry2Id)}</span>
       </p>
     </div>
   );
@@ -126,7 +146,7 @@ async function TableScreen({ searchParams }: { searchParams: PageProps<"/table">
           <div>
             <p className="text-sm font-semibold tracking-[0.2em] text-emerald-300 uppercase">Next match</p>
             <p className="mt-2 text-lg text-white/75">
-              {current.tournament.name} · {await matchRoundName(current)} · Race to {current.raceTo}
+              {current.tournament.name} · {await matchRoundName(current)} · {raceText(current.tournament)(current)}
             </p>
             {handicapNote && (
               <p className="mx-auto mt-4 w-fit rounded-xl bg-amber-300/15 px-4 py-2 text-lg font-semibold text-amber-100">
@@ -135,11 +155,21 @@ async function TableScreen({ searchParams }: { searchParams: PageProps<"/table">
             )}
           </div>
           <div className="flex flex-col items-center gap-3 sm:flex-row sm:gap-8">
-            <PlayerHeading name={name(current.entry1Id)} rank={rank(current.entry1Id)} />
+            <PlayerHeading name={name(current.entry1Id)} rank={rank(current.entry1Id)} group={!!frameMatch || current.tournament.entryType === "PAIRS"} />
             <span className="text-2xl font-semibold text-white/50">v</span>
-            <PlayerHeading name={name(current.entry2Id)} rank={rank(current.entry2Id)} />
+            <PlayerHeading name={name(current.entry2Id)} rank={rank(current.entry2Id)} group={!!frameMatch || current.tournament.entryType === "PAIRS"} />
           </div>
-          <StartMatch matchId={current.id} player1={name(current.entry1Id)} player2={name(current.entry2Id)} />
+          {frameMatch ? (
+            <FrameMatchStart
+              team1={frameMatch.team1}
+              team2={frameMatch.team2}
+              members={frameMatch.members}
+              lineupMode={frameMatch.lineupMode}
+              start={tableStartMatchAction.bind(null, current.id)}
+            />
+          ) : (
+            <StartMatch matchId={current.id} player1={name(current.entry1Id)} player2={name(current.entry2Id)} />
+          )}
         </div>
         {lastResult}
       </main>
@@ -200,11 +230,17 @@ function PairScreen({ code }: { code?: string }) {
   );
 }
 
-function PlayerHeading({ name, rank }: { name: string; rank: number | null | undefined }) {
+/** `group`: pairs have a handicap group (G2) rather than a player rank (R2). */
+function PlayerHeading({ name, rank, group }: { name: string; rank: number | null | undefined; group?: boolean }) {
   return (
     <span className="flex items-center gap-3">
       <span className="text-4xl font-bold sm:text-6xl">{name}</span>
-      {rank && <span className="rounded-lg bg-white/15 px-2.5 py-1 text-xl font-bold text-white/85">R{rank}</span>}
+      {rank && (
+        <span className="rounded-lg bg-white/15 px-2.5 py-1 text-xl font-bold text-white/85">
+          {group ? "G" : "R"}
+          {rank}
+        </span>
+      )}
     </span>
   );
 }
@@ -212,8 +248,8 @@ function PlayerHeading({ name, rank }: { name: string; rank: number | null | und
 async function entryNameMap(ids: (string | null | undefined)[]) {
   const wanted = ids.filter((id): id is string => !!id);
   if (!wanted.length) return new Map<string, { name: string; rank: number | null }>();
-  const entries = await db.entry.findMany({ where: { id: { in: wanted } }, include: { player: true } });
-  return new Map(entries.map((e) => [e.id, { name: playerName(e.player), rank: e.rank }]));
+  const entries = await db.entry.findMany({ where: { id: { in: wanted } }, include: { player: true, partner: true } });
+  return new Map(entries.map((e) => [e.id, { name: entryName(e), rank: e.rank }]));
 }
 
 async function matchRoundName(m: {

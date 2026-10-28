@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { db } from "@/lib/db";
-import { playerName } from "@/lib/queries";
+import { entryName, playerName } from "@/lib/queries";
 import { DISCIPLINES, type Discipline } from "@/lib/constants";
 import { Badge, Card, CardHeader, EmptyState, PageSkeleton } from "@/components/ui";
 
@@ -27,18 +27,17 @@ async function Player({ params }: { params: PageProps<"/players/[id]">["params"]
   const { id } = await params;
   const player = await db.player.findUnique({
     where: { id },
-    include: {
-      entries: {
-        where: { tournament: { isPublic: true } },
-        include: { tournament: true },
-        orderBy: { createdAt: "desc" },
-      },
-      ranks: { orderBy: { discipline: "asc" } },
-    },
+    include: { ranks: { orderBy: { discipline: "asc" } } },
   });
   if (!player) notFound();
+  // Comps entered alone or as part of a pair.
+  const entries = await db.entry.findMany({
+    where: { OR: [{ playerId: id }, { partnerId: id }], tournament: { isPublic: true } },
+    include: { tournament: true },
+    orderBy: { createdAt: "desc" },
+  });
 
-  const entryIds = player.entries.map((e) => e.id);
+  const entryIds = entries.map((e) => e.id);
   const matches = await db.match.findMany({
     where: {
       status: "COMPLETED",
@@ -49,8 +48,8 @@ async function Player({ params }: { params: PageProps<"/players/[id]">["params"]
     orderBy: { completedAt: "desc" },
   });
   const opponentEntryIds = matches.map((m) => (entryIds.includes(m.entry1Id!) ? m.entry2Id! : m.entry1Id!));
-  const opponents = await db.entry.findMany({ where: { id: { in: opponentEntryIds } }, include: { player: true } });
-  const opponentName = new Map(opponents.map((e) => [e.id, playerName(e.player)]));
+  const opponents = await db.entry.findMany({ where: { id: { in: opponentEntryIds } }, include: { player: true, partner: true } });
+  const opponentName = new Map(opponents.map((e) => [e.id, entryName(e)]));
 
   const rows = matches.map((m) => {
     const mine = entryIds.includes(m.entry1Id!) ? 1 : 2;
@@ -60,9 +59,11 @@ async function Player({ params }: { params: PageProps<"/players/[id]">["params"]
     const myRacks = myScore - (mine === 1 ? m.handicap1 : m.handicap2);
     const theirRacks = theirScore - (mine === 1 ? m.handicap2 : m.handicap1);
     const isWin = m.winnerId === (mine === 1 ? m.entry1Id : m.entry2Id);
-    return { m, myScore, theirScore, myRacks, theirRacks, isWin, opponent: opponentName.get(mine === 1 ? m.entry2Id! : m.entry1Id!) };
+    const isDraw = !m.winnerId;
+    return { m, myScore, theirScore, myRacks, theirRacks, isWin, isDraw, opponent: opponentName.get(mine === 1 ? m.entry2Id! : m.entry1Id!) };
   });
   const won = rows.filter((r) => r.isWin).length;
+  const drawn = rows.filter((r) => r.isDraw).length;
   const framesFor = rows.reduce((sum, r) => sum + r.myRacks, 0);
   const framesAgainst = rows.reduce((sum, r) => sum + r.theirRacks, 0);
   const winPct = matches.length ? Math.round((won / matches.length) * 100) : 0;
@@ -88,8 +89,8 @@ async function Player({ params }: { params: PageProps<"/players/[id]">["params"]
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat label="Tournaments" value={player.entries.length} />
-        <Stat label="Matches" value={`${won}–${matches.length - won}`} />
+        <Stat label="Tournaments" value={entries.length} />
+        <Stat label="Matches" value={drawn ? `${won}–${drawn}–${matches.length - won - drawn}` : `${won}–${matches.length - won}`} />
         <Stat label="Win rate" value={`${winPct}%`} />
         <Stat label="Racks won" value={`${framesFor}–${framesAgainst}`} />
       </div>
@@ -100,9 +101,11 @@ async function Player({ params }: { params: PageProps<"/players/[id]">["params"]
           <EmptyState title="No completed matches yet" />
         ) : (
           <ul className="divide-y divide-border">
-            {rows.slice(0, 30).map(({ m, myScore, theirScore, isWin, opponent }) => (
+            {rows.slice(0, 30).map(({ m, myScore, theirScore, isWin, isDraw, opponent }) => (
               <li key={m.id} className="flex flex-wrap items-center gap-3 px-5 py-3 text-sm">
-                <span className={`w-6 font-bold ${isWin ? "text-accent" : "text-live"}`}>{isWin ? "W" : "L"}</span>
+                <span className={`w-6 font-bold ${isWin ? "text-accent" : isDraw ? "text-muted" : "text-live"}`}>
+                  {isWin ? "W" : isDraw ? "D" : "L"}
+                </span>
                 <span className="w-14 font-semibold tabular-nums">
                   {myScore}–{theirScore}
                 </span>

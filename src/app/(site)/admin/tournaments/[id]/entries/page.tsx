@@ -1,10 +1,11 @@
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { addEntries, confirmEntry, removeEntry, saveEntries } from "@/actions/tournaments";
+import { addEntries, addPair, confirmEntry, removeEntry, saveEntries } from "@/actions/tournaments";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { getTournamentFull, playerName } from "@/lib/queries";
+import { entryName, getTournamentFull, playerName } from "@/lib/queries";
 import { ActionButton, ActionForm, SubmitButton } from "@/components/forms";
+import { PairPicker } from "@/components/tournament/pair-picker";
 import { PlayerPicker } from "@/components/tournament/player-picker";
 import { Badge, Card, CardHeader, EmptyState, Field, Input, PageSkeleton } from "@/components/ui";
 
@@ -22,15 +23,14 @@ async function Entries({ params }: { params: PageProps<"/admin/tournaments/[id]/
   const t = await getTournamentFull({ id });
   if (!t || t.organizationId !== user.organizationId) notFound();
   const locked = t.matches.length > 0;
-  const enteredIds = new Set(t.entries.map((e) => e.playerId));
+  const pairs = t.entryType === "PAIRS";
+  const enteredIds = new Set(t.entries.flatMap((e) => (e.partnerId ? [e.playerId, e.partnerId] : [e.playerId])));
   const available = await db.player.findMany({
     where: { id: { notIn: [...enteredIds] } },
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
     select: { id: true, firstName: true, lastName: true, nickname: true, homeClub: true },
   });
-  const entries = [...t.entries].sort(
-    (a, b) => (a.seed ?? 999) - (b.seed ?? 999) || playerName(a.player).localeCompare(playerName(b.player)),
-  );
+  const entries = [...t.entries].sort((a, b) => (a.seed ?? 999) - (b.seed ?? 999) || entryName(a).localeCompare(entryName(b)));
   const manual = t.seeding === "MANUAL";
   const handicapped = !!t.handicapStyle;
   // Before the draw, entries without a rank show the player's current rank for this discipline.
@@ -44,23 +44,30 @@ async function Entries({ params }: { params: PageProps<"/admin/tournaments/[id]/
       )
     : new Map<string, number>();
   const showSave = (manual && !locked) || handicapped;
+  const pickerOptions = available.map((p) => ({
+    id: p.id,
+    name: playerName(p),
+    detail: [p.nickname && `“${p.nickname}”`, p.homeClub].filter(Boolean).join(" · ") || null,
+  }));
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
       <Card>
         <CardHeader
-          title={`Entries (${t.entries.length}${t.maxEntries ? ` / ${t.maxEntries}` : ""})`}
+          title={`${pairs ? "Pairs" : "Entries"} (${t.entries.length}${t.maxEntries ? ` / ${t.maxEntries}` : ""})`}
           subtitle={[
             locked ? "The draw has been made — reset it to change entries." : manual ? "Manual seeding: enter seeds then save." : null,
-            handicapped
-              ? "Ranks (1 = strongest) come from the player directory. Changing one here applies to this comp only, for matches that haven't started."
-              : null,
+            handicapped && pairs
+              ? "Give each pair its handicap group (1 = strongest). The start between groups is set in the tournament settings."
+              : handicapped
+                ? "Ranks (1 = strongest) come from the player directory. Changing one here applies to this comp only, for matches that haven't started."
+                : null,
           ]
             .filter(Boolean)
             .join(" ")}
         />
         {entries.length === 0 ? (
-          <EmptyState title="No players entered yet" />
+          <EmptyState title={pairs ? "No pairs entered yet" : "No players entered yet"} />
         ) : (
           <>
             {/* Seed and rank inputs belong to the form below via the `form` attribute, so the
@@ -81,13 +88,22 @@ async function Entries({ params }: { params: PageProps<"/admin/tournaments/[id]/
                       placeholder="–"
                     />
                   )}
-                  <span className="flex-1 font-medium">{playerName(e.player)}</span>
+                  <span className="flex-1 font-medium">
+                    {entryName(e)}
+                    {e.teamName && e.partner && (
+                      <span className="ml-2 text-sm font-normal text-muted">
+                        {playerName(e.player)} &amp; {playerName(e.partner)}
+                      </span>
+                    )}
+                  </span>
                   {e.status === "REGISTERED" && (e.contactEmail || e.contactPhone) && (
                     <span className="text-xs text-muted">{[e.contactEmail, e.contactPhone].filter(Boolean).join(" · ")}</span>
                   )}
                   {handicapped && (
                     <label className="flex items-center gap-1.5 text-xs text-muted">
-                      {e.rank && playerRanks.has(e.playerId) && e.rank !== playerRanks.get(e.playerId) ? (
+                      {pairs ? (
+                        "Handicap group"
+                      ) : e.rank && playerRanks.has(e.playerId) && e.rank !== playerRanks.get(e.playerId) ? (
                         <span className="font-semibold text-warn" title="Changed for this comp only">
                           Comp rank (ranked {playerRanks.get(e.playerId)})
                         </span>
@@ -99,7 +115,7 @@ async function Entries({ params }: { params: PageProps<"/admin/tournaments/[id]/
                         name={`rank-${e.id}`}
                         type="number"
                         min={1}
-                        defaultValue={e.rank ?? playerRanks.get(e.playerId) ?? ""}
+                        defaultValue={e.rank ?? (pairs ? "" : playerRanks.get(e.playerId)) ?? ""}
                         className="w-16 py-1 text-center"
                         placeholder="–"
                       />
@@ -121,26 +137,42 @@ async function Entries({ params }: { params: PageProps<"/admin/tournaments/[id]/
             </ul>
             {showSave && (
               <ActionForm id="entries-form" action={saveEntries.bind(null, t.id)} className="border-t border-border p-4">
-                <SubmitButton variant="secondary">{handicapped ? (manual && !locked ? "Save seeds & ranks" : "Save ranks") : "Save seeds"}</SubmitButton>
+                <SubmitButton variant="secondary">
+                  {handicapped
+                    ? `Save ${manual && !locked ? "seeds & " : ""}${pairs ? "handicap groups" : "ranks"}`
+                    : "Save seeds"}
+                </SubmitButton>
               </ActionForm>
             )}
           </>
         )}
       </Card>
 
-      {!locked && (
+      {!locked && pairs && (
+        <Card className="h-fit">
+          <CardHeader title="Add a pair" />
+          <ActionForm action={addPair.bind(null, t.id)} className="space-y-4 p-5" resetOnSuccess>
+            <PairPicker players={pickerOptions} />
+            <div className="grid grid-cols-[1fr_auto] gap-3">
+              <Field label="Team name (optional)">
+                <Input name="teamName" placeholder="e.g. The Cue Balls" />
+              </Field>
+              {handicapped && (
+                <Field label="Handicap group">
+                  <Input name="rank" type="number" min={1} className="w-24" placeholder="–" />
+                </Field>
+              )}
+            </div>
+            <SubmitButton>Add pair</SubmitButton>
+          </ActionForm>
+        </Card>
+      )}
+
+      {!locked && !pairs && (
         <Card className="h-fit">
           <CardHeader title="Add players" />
           <ActionForm action={addEntries.bind(null, t.id)} className="space-y-4 p-5" resetOnSuccess>
-            {available.length > 0 && (
-              <PlayerPicker
-                players={available.map((p) => ({
-                  id: p.id,
-                  name: playerName(p),
-                  detail: [p.nickname && `“${p.nickname}”`, p.homeClub].filter(Boolean).join(" · ") || null,
-                }))}
-              />
-            )}
+            {available.length > 0 && <PlayerPicker players={pickerOptions} />}
             <Field label="Or add a new player" hint="Adds them to the shared player directory too">
               <Input name="newPlayer" placeholder="First Last" />
             </Field>

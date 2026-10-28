@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeHandicap, describeHandicap, parseStartTable, startForGap } from "./handicap";
+import { computeHandicap, describeHandicap, matrixSize, parseMatrixForm, parseStartTable, startForGap } from "./handicap";
 
 const base = { starts: [1, 1, 2], raceTo: 3 };
 
@@ -59,6 +59,26 @@ describe("describeHandicap", () => {
       "Alex races to 4, Sam races to 3",
     );
     expect(describeHandicap({ handicap1: 0, handicap2: 0, target1: 3, target2: 3 }, "Alex", "Sam")).toBeNull();
+  });
+});
+
+describe("pairing table", () => {
+  const matrix = { "1-2": 1, "1-3": 3, "2-3": 1 };
+  it("takes each pairing's start from the table, not the gap", () => {
+    const start = (rank1: number, rank2: number) =>
+      computeHandicap({ style: "HEAD_START", starts: [], matrix, raceTo: 6, rank1, rank2 });
+    expect(start(1, 3)).toMatchObject({ handicap1: 0, handicap2: 3 });
+    expect(start(3, 2)).toMatchObject({ handicap1: 1, handicap2: 0 });
+    // Ranks outside the table play level.
+    expect(start(1, 4)).toMatchObject({ handicap1: 0, handicap2: 0 });
+  });
+
+  it("reads the settings form", () => {
+    const form: Record<string, string> = { "pair-1-2": "1", "pair-1-3": "3", "pair-2-3": "" };
+    expect(parseMatrixForm(3, (k) => form[k])).toEqual({ "1-2": 1, "1-3": 3 });
+    expect(matrixSize({ "1-2": 1, "2-4": 2 })).toBe(4);
+    expect(parseMatrixForm(2, () => "")).toBeNull();
+    expect(() => parseMatrixForm(3, (k) => (k === "pair-1-2" ? "x" : ""))).toThrow();
   });
 });
 

@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { deleteTournament, updateTournament } from "@/actions/tournaments";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { parseStartMatrix } from "@/lib/handicap";
 import { ConfirmButton } from "@/components/forms";
 import { TournamentForm } from "@/components/tournament/tournament-form";
 import { Card, CardHeader, PageSkeleton } from "@/components/ui";
@@ -27,7 +28,7 @@ async function Settings({ params }: { params: PageProps<"/admin/tournaments/[id]
   const { id } = await params;
   const t = await db.tournament.findFirst({
     where: { id, organizationId: user.organizationId },
-    include: { _count: { select: { matches: true } } },
+    include: { _count: { select: { matches: true, entries: true } } },
   });
   if (!t) notFound();
   const venues = await db.venue.findMany({
@@ -44,7 +45,8 @@ async function Settings({ params }: { params: PageProps<"/admin/tournaments/[id]
           venues={venues}
           submitLabel="Save settings"
           lockStructure={t._count.matches > 0}
-          defaults={{ ...t, startsAt: toLocalInput(t.startsAt) }}
+          lockEntryType={t._count.entries > 0}
+          defaults={{ ...t, startsAt: toLocalInput(t.startsAt), handicapMatrix: parseStartMatrix(t.handicapMatrix) }}
         />
       </Card>
       {user.role === "OWNER" && (

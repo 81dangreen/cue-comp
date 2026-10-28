@@ -58,7 +58,7 @@ export async function updatePlayer(playerId: string, _prev: ActionResult, formDa
 
 export async function deletePlayer(playerId: string) {
   await requireDirectoryAdmin();
-  const entries = await db.entry.count({ where: { playerId } });
+  const entries = await db.entry.count({ where: { OR: [{ playerId }, { partnerId: playerId }] } });
   if (entries > 0) throw new Error("This player has tournament history and can't be deleted");
   await db.player.deleteMany({ where: { id: playerId } });
   redirect("/admin/players");

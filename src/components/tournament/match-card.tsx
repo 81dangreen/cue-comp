@@ -54,6 +54,7 @@ export function MatchCard({
   fluid,
   href,
   className,
+  raceText = (m) => `Race to ${m.raceTo}`,
 }: {
   match: MatchWithTable;
   names: Map<string, string>;
@@ -63,9 +64,12 @@ export function MatchCard({
   fluid?: boolean;
   href?: string;
   className?: string;
+  /** How the match is won, e.g. "Race to 5" or "First to 6". */
+  raceText?: (m: { raceTo: number; bracket: string }) => string;
 }) {
   // A bye "completes" automatically; don't present it as a won match.
   const decided = match.status === "COMPLETED" && !match.isBye;
+  const drawn = decided && !match.winnerId;
   const live = match.status === "LIVE";
   const showScore = !match.isBye && (live || decided || match.score1 + match.score2 > 0);
   const n1 = match.entry1Id ? names.get(match.entry1Id) : undefined;
@@ -98,7 +102,7 @@ export function MatchCard({
           {live ? `LIVE${label ? ` · ${label}` : ""}` : label}
         </span>
         <span className="shrink-0">
-          {match.table ? match.table.name : !match.isBye && !decided ? `Race to ${match.raceTo}` : ""}
+          {match.table ? match.table.name : drawn ? "Drawn" : !match.isBye && !decided ? raceText(match) : ""}
         </span>
       </div>
       <Side

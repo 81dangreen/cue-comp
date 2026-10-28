@@ -25,7 +25,7 @@ async function Matches({ params }: { params: PageProps<"/t/[slug]/matches">["par
       {sections.map((s) => (
         <Card key={s.title}>
           <CardHeader title={s.title} />
-          <MatchList matches={s.matches} names={names} />
+          <MatchList matches={s.matches} names={names} linkFor={(m) => `/t/${t.slug}/matches/${m.id}`} />
         </Card>
       ))}
     </div>

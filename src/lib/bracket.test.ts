@@ -146,6 +146,19 @@ describe("round robin", () => {
   });
 });
 
+describe("plate", () => {
+  it("draws the next finishers from each group into a separate bracket", () => {
+    const standings = [["A1", "A2", "A3", "A4"], ["B1", "B2", "B3", "B4"], ["C1", "C2", "C3", "C4"], ["D1", "D2", "D3", "D4"]];
+    const plate = orderQualifiers(standings, 1, 2);
+    expect(plate).toEqual(["A3", "B3", "C3", "D3"]);
+    const specs = singleElimination(plate, { raceTo: 6 }, { plate: true });
+    expect(specs.every((s) => s.bracket === "PLATE" && s.key.startsWith("P"))).toBe(true);
+    expect(specs).toHaveLength(3);
+    expect(roundLabel("PLATE", 1, 2)).toBe("Plate Semi Finals");
+    expect(roundLabel("PLATE", 2, 2)).toBe("Plate Final");
+  });
+});
+
 describe("roundLabel", () => {
   it("names knockout rounds by players remaining", () => {
     // 64-player single elimination has 6 rounds.

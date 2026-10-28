@@ -1,15 +1,18 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { addFrameAction, assignTableAction, setResultAction, undoFrameAction } from "@/actions/matches";
+import { addFrameAction, assignTableAction, setResultAction, startMatchAction, undoFrameAction } from "@/actions/matches";
 import { requireUser } from "@/lib/auth";
 import { roundLabel } from "@/lib/bracket";
+import { frameMatchData } from "@/lib/frame-match";
 import { describeHandicap } from "@/lib/handicap";
 import { matchHandicap } from "@/lib/tournament-service";
 import { db } from "@/lib/db";
-import { playerName } from "@/lib/queries";
+import { entryName } from "@/lib/queries";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { LiveRefresher } from "@/components/live-refresher";
+import { FrameMatchStart, FrameScoreboard } from "@/components/scoring/frame-scoreboard";
 import { Scoreboard } from "@/components/scoring/scoreboard";
 import { TableSelect } from "@/components/tournament/table-select";
 import { Input } from "@/components/ui";
@@ -39,11 +42,11 @@ async function Score({ params }: { params: PageProps<"/score/[matchId]">["params
 
   const entries = await db.entry.findMany({
     where: { id: { in: [match.entry1Id, match.entry2Id].filter((x): x is string => !!x) } },
-    include: { player: true },
+    include: { player: true, partner: true },
   });
   const name = (id: string | null) => {
     const e = entries.find((x) => x.id === id);
-    return e ? playerName(e.player) : "TBD";
+    return e ? entryName(e) : "TBD";
   };
   const totalRounds = await db.match.aggregate({
     where: { tournamentId: match.tournamentId, bracket: match.bracket },
@@ -51,7 +54,7 @@ async function Score({ params }: { params: PageProps<"/score/[matchId]">["params
   });
   const roundName =
     match.bracket === "GROUP"
-      ? "Group stage"
+      ? (match.groupId && (await db.group.findUnique({ where: { id: match.groupId } }))?.name) || "Group stage"
       : roundLabel(match.bracket, match.round, totalRounds._max.round ?? match.round, {
           doubleElim: match.tournament.format === "DOUBLE_ELIM",
         });
@@ -78,14 +81,50 @@ async function Score({ params }: { params: PageProps<"/score/[matchId]">["params
   });
   const busyIds = new Set(busy.map((b) => b.tableId));
   const tables = (match.tournament.venue?.tables ?? []).map((t) => ({ id: t.id, name: t.name, busy: busyIds.has(t.id) }));
+  const frameMatch = await frameMatchData(match);
+  const backHref = isAdmin ? `/admin/tournaments/${match.tournamentId}` : `/t/${match.tournament.slug}`;
 
   return (
     <>
       <LiveRefresher tournamentId={match.tournamentId} quiet />
+      {frameMatch && notStarted ? (
+        <div className="flex min-h-dvh flex-col items-center gap-8 bg-[radial-gradient(ellipse_at_top,#14513c_0%,#0a2a1f_45%,#05120d_100%)] p-6 text-white">
+          <Link href={backHref} className="self-start rounded-lg px-2 py-1 text-sm text-white/70 hover:bg-white/10">
+            ← Back
+          </Link>
+          <div className="text-center">
+            <p className="text-sm font-semibold tracking-[0.2em] text-emerald-300 uppercase">{roundName}</p>
+            <p className="mt-3 text-3xl font-bold sm:text-5xl">
+              {frameMatch.team1} <span className="text-white/50">v</span> {frameMatch.team2}
+            </p>
+            {frameMatch.handicapNote && (
+              <p className="mx-auto mt-4 w-fit rounded-xl bg-amber-300/15 px-4 py-2 font-semibold text-amber-100">
+                Handicap: {frameMatch.handicapNote}
+              </p>
+            )}
+          </div>
+          <FrameMatchStart
+            team1={frameMatch.team1}
+            team2={frameMatch.team2}
+            members={frameMatch.members}
+            lineupMode={frameMatch.lineupMode}
+            start={startMatchAction.bind(null, match.id)}
+          />
+        </div>
+      ) : frameMatch ? (
+        <FrameScoreboard
+          {...frameMatch}
+          roundName={roundName}
+          tableName={match.table?.name}
+          backHref={backHref}
+          addFrame={addFrameAction.bind(null, match.id)}
+          undo={undoFrameAction.bind(null, match.id)}
+        />
+      ) : (
       <Scoreboard
         roundName={roundName}
         tournamentName={match.tournament.name}
-        backHref={isAdmin ? `/admin/tournaments/${match.tournamentId}` : `/t/${match.tournament.slug}`}
+        backHref={backHref}
         raceTo={match.raceTo}
         status={match.status}
         tableName={match.table?.name}
@@ -107,13 +146,14 @@ async function Score({ params }: { params: PageProps<"/score/[matchId]">["params
         addFrame={addFrameAction.bind(null, match.id)}
         undo={undoFrameAction.bind(null, match.id)}
       />
+      )}
       {isAdmin && (
         <div className="flex flex-wrap items-start gap-6 border-t border-white/10 bg-[#0b0f0d] px-6 py-4 text-sm text-white/80">
           <ActionForm action={setResultAction.bind(null, match.id)} className="flex flex-wrap items-center gap-2">
             <span>Enter result directly:</span>
-            <Input name="score1" type="number" min={0} max={handicap.target1} defaultValue={match.score1} className="w-16 bg-transparent text-white" aria-label={`${name(match.entry1Id)} score`} />
+            <Input name="score1" type="number" min={-20} max={frameMatch ? 50 : handicap.target1} defaultValue={match.score1} className="w-16 bg-transparent text-white" aria-label={`${name(match.entry1Id)} score`} />
             <span>–</span>
-            <Input name="score2" type="number" min={0} max={handicap.target2} defaultValue={match.score2} className="w-16 bg-transparent text-white" aria-label={`${name(match.entry2Id)} score`} />
+            <Input name="score2" type="number" min={-20} max={frameMatch ? 50 : handicap.target2} defaultValue={match.score2} className="w-16 bg-transparent text-white" aria-label={`${name(match.entry2Id)} score`} />
             <SubmitButton variant="secondary" className="bg-transparent text-white">
               {match.status === "COMPLETED" ? "Correct result" : "Save result"}
             </SubmitButton>

@@ -17,7 +17,9 @@ export function TableSelect({
   const ref = useRef<HTMLFormElement>(null);
   return (
     <form ref={ref} action={formAction} className="inline-flex flex-col">
+      {/* Keyed on the value so a table assigned elsewhere (e.g. by auto-pilot) shows after a refresh. */}
       <select
+        key={value ?? ""}
         name="tableId"
         defaultValue={value ?? ""}
         disabled={pending}

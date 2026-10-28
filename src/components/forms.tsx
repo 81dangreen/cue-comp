@@ -5,6 +5,9 @@ import { useFormStatus } from "react-dom";
 import { Button, cx } from "./ui";
 
 export type ActionResult = { error?: string; message?: string } | undefined;
+/** Fired on an ActionForm with `resetOnSuccess` after its action succeeds. */
+export const FORM_SUCCESS_EVENT = "actionformsuccess";
+
 export type FormAction = (prev: ActionResult, formData: FormData) => Promise<ActionResult>;
 
 /** A form bound to a server action, showing its error/success message inline. */
@@ -34,6 +37,8 @@ export function ActionForm({
       restoreFields(ref.current, submitted.current);
     } else if (!state.error && resetOnSuccess) {
       ref.current.reset();
+      // Lets components with their own state (e.g. pickers) clear themselves too.
+      ref.current.dispatchEvent(new Event(FORM_SUCCESS_EVENT));
     }
   }, [state, resetOnSuccess]);
 

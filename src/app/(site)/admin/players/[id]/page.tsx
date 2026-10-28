@@ -24,12 +24,14 @@ async function EditPlayer({ params }: { params: PageProps<"/admin/players/[id]">
     where: { id },
     include: {
       entries: { include: { tournament: { include: { organization: true } } }, orderBy: { createdAt: "desc" } },
+      partnerEntries: { include: { tournament: { include: { organization: true } } }, orderBy: { createdAt: "desc" } },
       ranks: true,
       organization: true,
     },
   });
   if (!player) notFound();
   const admin = user.directoryAdmin;
+  const entries = [...player.entries, ...player.partnerEntries].sort((a, b) => +b.createdAt - +a.createdAt);
   // Merge candidates: others sharing the surname, the usual shape of a duplicate.
   const duplicates = admin
     ? await db.player.findMany({
@@ -124,11 +126,11 @@ async function EditPlayer({ params }: { params: PageProps<"/admin/players/[id]">
 
         <Card>
           <CardHeader title="Competitions" subtitle="Every comp this player has entered, with any organiser." />
-          {player.entries.length === 0 ? (
+          {entries.length === 0 ? (
             <p className="px-5 py-4 text-sm text-muted">Not entered in any competitions yet.</p>
           ) : (
             <ul className="divide-y divide-border">
-              {player.entries.map((e) => (
+              {entries.map((e) => (
                 <li key={e.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-2.5 text-sm">
                   {e.tournament.organizationId === user.organizationId ? (
                     <Link href={`/admin/tournaments/${e.tournamentId}`} className="font-medium hover:text-accent">
@@ -180,7 +182,7 @@ async function EditPlayer({ params }: { params: PageProps<"/admin/players/[id]">
           </Card>
         )}
 
-        {admin && player.entries.length === 0 && (
+        {admin && entries.length === 0 && (
           <form action={deletePlayer.bind(null, player.id)}>
             <ConfirmButton variant="danger" message={`Delete ${playerName(player)} from the directory?`}>
               Delete player

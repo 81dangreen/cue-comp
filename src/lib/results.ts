@@ -17,8 +17,9 @@ export interface ResultMatch {
 
 const depth = (m: ResultMatch) => (m.bracket === "FINAL" ? 1000 + m.round : m.round);
 
-export function eliminationPlacings(matches: ResultMatch[]): Map<string, number> {
-  const ko = matches.filter((m) => m.bracket !== "GROUP");
+/** Placings within the main knockout (group matches and any plate are left out). */
+export function eliminationPlacings(matches: ResultMatch[], opts: { plate?: boolean } = {}): Map<string, number> {
+  const ko = matches.filter((m) => (opts.plate ? m.bracket === "PLATE" : m.bracket !== "GROUP" && m.bracket !== "PLATE"));
   const reset = ko.find((m) => m.bracket === "FINAL" && m.round === 2);
   const eliminatedAt = new Map<string, number>();
   const participants = new Set<string>();

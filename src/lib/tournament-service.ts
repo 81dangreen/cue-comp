@@ -13,9 +13,20 @@ import {
   roundRobinGroup,
   singleElimination,
 } from "./bracket";
-import { completeMatch, EngineError, EngineMatch, reopenMatch } from "./engine-core";
-import { computeHandicap, type MatchHandicap } from "./handicap";
-import { computeStandings } from "./standings";
+import { completeDraw, completeMatch, EngineError, EngineMatch, reopenMatch } from "./engine-core";
+import { computeHandicap, parseStartMatrix, type MatchHandicap } from "./handicap";
+import {
+  drawLineup,
+  frameAt,
+  frameOutcome,
+  framePlayers,
+  isSingles,
+  parseLineup,
+  singlesQuota,
+  type FrameFormat,
+  type Lineup,
+} from "./match-format";
+import { computeStandings, unresolvedTies, type StandingRules } from "./standings";
 
 type Tx = Prisma.TransactionClient;
 
@@ -71,6 +82,19 @@ export function matchTargets(m: { raceTo: number; target1: number | null; target
   return { target1: m.target1 ?? m.raceTo, target2: m.target2 ?? m.raceTo };
 }
 
+/**
+ * A frame-list match's rules (pairs comps), or null for a plain race. Knockout matches
+ * use the knockout finish and can't be drawn.
+ */
+export function frameFormat(
+  t: { matchFrames: string[]; groupFinish: string; koFinish: string },
+  bracket: string,
+): FrameFormat | null {
+  if (!t.matchFrames.length) return null;
+  const knockout = bracket !== "GROUP";
+  return { frames: t.matchFrames, finish: knockout ? t.koFinish : t.groupFinish, knockout };
+}
+
 /** The handicap this match gets from its tournament settings and the two entries' ranks. */
 async function handicapFor(
   tx: Tx | typeof db,
@@ -78,7 +102,7 @@ async function handicapFor(
 ): Promise<MatchHandicap> {
   const t = await tx.tournament.findUniqueOrThrow({
     where: { id: m.tournamentId },
-    select: { handicapStyle: true, handicapStarts: true },
+    select: { handicapStyle: true, handicapStarts: true, handicapMatrix: true },
   });
   const entries = t.handicapStyle
     ? await tx.entry.findMany({ where: { id: { in: [m.entry1Id, m.entry2Id].filter((x): x is string => !!x) } } })
@@ -87,6 +111,7 @@ async function handicapFor(
   return computeHandicap({
     style: t.handicapStyle,
     starts: t.handicapStarts,
+    matrix: parseStartMatrix(t.handicapMatrix),
     raceTo: m.raceTo,
     rank1: rank(m.entry1Id),
     rank2: rank(m.entry2Id),
@@ -163,10 +188,13 @@ function seededEntryIds(entries: { id: string; seed: number | null }[], seeding:
   return [...seeded, ...unseeded].map((e) => e.id);
 }
 
-/** Copy each entry's current rank in the tournament's discipline, unless the organiser already set one. */
+/**
+ * Copy each entry's current rank in the tournament's discipline, unless the organiser already set one.
+ * Pairs have no directory rank: the organiser gives each pair its handicap group.
+ */
 async function freezeRanks(tx: Tx, tournamentId: string, discipline: string) {
   const entries = await tx.entry.findMany({
-    where: { tournamentId, rank: null },
+    where: { tournamentId, rank: null, partnerId: null },
     include: { player: { include: { ranks: { where: { discipline } } } } },
   });
   for (const e of entries) {
@@ -181,16 +209,20 @@ export async function generateDraw(tournamentId: string) {
   await db.$transaction(async (tx) => {
     const t = await tx.tournament.findUniqueOrThrow({
       where: { id: tournamentId },
-      include: { entries: { where: { status: "CONFIRMED" } } },
+      include: {
+        entries: { where: { status: "CONFIRMED" } },
+        venue: { include: { tables: { orderBy: { sortOrder: "asc" } } } },
+      },
     });
     const started = await tx.match.count({
       where: { tournamentId, isBye: false, OR: [{ status: "LIVE" }, { status: "COMPLETED" }] },
     });
     if (started > 0) throw new ServiceError("Matches have already been played — reset the draw first");
-    if (t.entries.length < 2) throw new ServiceError("At least 2 confirmed players are needed");
+    const word = t.entryType === "PAIRS" ? "pairs" : "players";
+    if (t.entries.length < 2) throw new ServiceError(`At least 2 confirmed ${word} are needed`);
 
     await tx.match.deleteMany({ where: { tournamentId } });
-    await tx.entry.updateMany({ where: { tournamentId }, data: { groupId: null } });
+    await tx.entry.updateMany({ where: { tournamentId }, data: { groupId: null, tiebreak: null } });
     await freezeRanks(tx, tournamentId, t.discipline);
     await tx.group.deleteMany({ where: { tournamentId } });
 
@@ -204,14 +236,19 @@ export async function generateDraw(tournamentId: string) {
     } else {
       const groupCount = t.format === "ROUND_ROBIN" ? 1 : Math.max(1, t.groupCount ?? 2);
       if (t.format === "GROUPS_KO" && order.length < groupCount * 2) {
-        throw new ServiceError(`Need at least ${groupCount * 2} players for ${groupCount} groups`);
+        throw new ServiceError(`Need at least ${groupCount * 2} ${word} for ${groupCount} groups`);
+      }
+      const tables = t.venue?.tables ?? [];
+      if (t.tablePerGroup && tables.length < groupCount) {
+        throw new ServiceError(`Each group needs its own table: ${groupCount} groups but ${tables.length} tables at the venue`);
       }
       const buckets = distributeIntoGroups(order, groupCount);
       const groupIds = new Map<string, string>();
       const specs: MatchSpec[] = [];
       for (let i = 0; i < buckets.length; i++) {
         const name = groupCount === 1 ? "Table" : `Group ${groupName(i)}`;
-        const group = await tx.group.create({ data: { tournamentId, name, index: i } });
+        const tableId = t.tablePerGroup ? tables[i].id : null;
+        const group = await tx.group.create({ data: { tournamentId, name, index: i, tableId } });
         groupIds.set(group.id, group.id);
         await tx.entry.updateMany({ where: { id: { in: buckets[i] } }, data: { groupId: group.id } });
         specs.push(...roundRobinGroup(group.id, groupCount === 1 ? "M" : groupName(i), buckets[i], t.raceTo));
@@ -233,14 +270,29 @@ export async function resetDraw(tournamentId: string) {
   const previousTables = await tournamentTableIds(tournamentId);
   await db.$transaction(async (tx) => {
     await tx.match.deleteMany({ where: { tournamentId } });
-    await tx.entry.updateMany({ where: { tournamentId }, data: { groupId: null, finalRank: null } });
+    await tx.entry.updateMany({ where: { tournamentId }, data: { groupId: null, finalRank: null, tiebreak: null } });
     await tx.group.deleteMany({ where: { tournamentId } });
     await tx.tournament.update({ where: { id: tournamentId }, data: { status: "DRAFT" } });
   });
   publish(tournamentId, previousTables);
 }
 
+/** A tournament's group-table rules, with shootout results from its entries. */
+export function standingRules(
+  t: { pointsWin: number; pointsDraw: number; pointsLoss: number; tiebreakers: string[] },
+  entries: { id: string; tiebreak: number | null }[],
+): StandingRules {
+  return {
+    win: t.pointsWin,
+    draw: t.pointsDraw,
+    loss: t.pointsLoss,
+    tiebreakers: t.tiebreakers,
+    shootout: new Map(entries.map((e) => [e.id, e.tiebreak])),
+  };
+}
+
 export async function groupStandings(tx: Tx | typeof db, tournamentId: string) {
+  const t = await tx.tournament.findUniqueOrThrow({ where: { id: tournamentId } });
   const groups = await tx.group.findMany({
     where: { tournamentId },
     orderBy: { index: "asc" },
@@ -249,11 +301,29 @@ export async function groupStandings(tx: Tx | typeof db, tournamentId: string) {
   return groups.map((g) => {
     // Seed order inside the group isn't stored, so fall back to entry creation order.
     const entryIds = g.entries.sort((a, b) => +a.createdAt - +b.createdAt).map((e) => e.id);
-    return { group: g, rows: computeStandings(entryIds, g.matches) };
+    return { group: g, rows: computeStandings(entryIds, g.matches, standingRules(t, g.entries)) };
   });
 }
 
-/** Groups → knockout: once all group matches are done, seed the qualifiers into a bracket. */
+/** Record the shootout order (best first) for entries level in a group table. */
+export async function setShootout(tournamentId: string, order: string[]) {
+  const entries = await db.entry.findMany({ where: { tournamentId, id: { in: order } } });
+  if (entries.length !== order.length || new Set(order).size !== order.length) throw new ServiceError("Choose each tied entry once");
+  if (await db.match.count({ where: { tournamentId, bracket: { not: "GROUP" } } })) {
+    throw new ServiceError("The knockout stage has already been drawn");
+  }
+  await db.$transaction(order.map((id, i) => db.entry.update({ where: { id }, data: { tiebreak: i + 1 } })));
+  publish(tournamentId);
+}
+
+/** Give a group a different table (or none). */
+export async function setGroupTable(groupId: string, tableId: string | null) {
+  const g = await db.group.update({ where: { id: groupId }, data: { tableId } });
+  publish(g.tournamentId);
+  await autoPilot(g.tournamentId);
+}
+
+/** Groups → knockout: once all group matches are done, seed the qualifiers into a bracket (and a plate). */
 export async function generateKnockout(tournamentId: string) {
   await db.$transaction(async (tx) => {
     const t = await tx.tournament.findUniqueOrThrow({ where: { id: tournamentId } });
@@ -267,12 +337,18 @@ export async function generateKnockout(tournamentId: string) {
 
     const perGroup = Math.max(1, t.qualifiersPerGroup ?? 2);
     const standings = await groupStandings(tx, tournamentId);
-    const qualifiers = orderQualifiers(
-      standings.map((s) => s.rows.map((r) => r.entryId)),
-      perGroup,
-    );
+    if (t.tiebreakers.includes("SHOOTOUT")) {
+      const tied = standings.filter((s) => unresolvedTies(s.rows).length).map((s) => s.group.name);
+      if (tied.length) throw new ServiceError(`Enter the shootout result for the tie in ${tied.join(", ")} first`);
+    }
+    const positions = standings.map((s) => s.rows.map((r) => r.entryId));
+    const race = { raceTo: t.raceTo, raceToFinal: t.raceToFinal };
+    const qualifiers = orderQualifiers(positions, perGroup);
     if (qualifiers.length < 2) throw new ServiceError("Not enough qualifiers for a knockout");
-    await createMatches(tx, tournamentId, singleElimination(qualifiers, { raceTo: t.raceTo, raceToFinal: t.raceToFinal }));
+    await createMatches(tx, tournamentId, singleElimination(qualifiers, race));
+    // The next finishers in each group play off for the plate.
+    const plate = orderQualifiers(positions, t.plateQualifiers ?? 0, perGroup);
+    if (plate.length >= 2) await createMatches(tx, tournamentId, singleElimination(plate, race, { plate: true }));
   });
   publish(tournamentId);
   await autoPilot(tournamentId);
@@ -296,47 +372,140 @@ function wrapEngine<T>(fn: () => T): T {
   }
 }
 
-/** Score one rack/frame for a player. Completes the match when they reach the race. */
-export async function addFrame(matchId: string, slot: 1 | 2, breakAndRun = false) {
+/** Finish a match with a winner, or as a draw (winner null). */
+async function finishMatch(tx: Tx, m: { id: string; tournamentId: string }, winner: 1 | 2 | null) {
+  const matches = await loadEngine(tx, m.tournamentId);
+  const changed = wrapEngine(() => (winner ? completeMatch(matches, m.id, winner) : completeDraw(matches, m.id)));
+  await persist(tx, matches, changed);
+  await refreshTournamentStatus(tx, m.tournamentId);
+}
+
+type MatchRow = Prisma.MatchGetPayload<object>;
+
+/** A frame-list match's rules and the two pairs' players, or null for a plain race. */
+async function frameContext(tx: Tx, m: MatchRow) {
+  const t = await tx.tournament.findUniqueOrThrow({ where: { id: m.tournamentId } });
+  const fmt = frameFormat(t, m.bracket);
+  if (!fmt) return null;
+  const entries = await tx.entry.findMany({ where: { id: { in: [m.entry1Id!, m.entry2Id!] } } });
+  const members = (id: string | null): [string, string] => {
+    const e = entries.find((x) => x.id === id);
+    if (!e?.partnerId) throw new ServiceError("Both pairs need two players");
+    return [e.playerId, e.partnerId];
+  };
+  return { fmt, lineupMode: t.lineupMode, side1: members(m.entry1Id), side2: members(m.entry2Id) };
+}
+type FrameContext = NonNullable<Awaited<ReturnType<typeof frameContext>>>;
+
+/** The order of play a frame-list match starts with: drawn at random, chosen by the pairs, or picked frame by frame. */
+function startingLineup(ctx: FrameContext, chosen: Lineup | null | undefined): Lineup | null {
+  if (ctx.lineupMode === "PICK_FRAME") return null;
+  if (ctx.lineupMode === "PICK_MATCH") {
+    if (!chosen) throw new ServiceError("Choose each pair's Player A and Player B first");
+    const valid = (side: { A: string; B: string }, members: [string, string]) =>
+      side.A !== side.B && members.includes(side.A) && members.includes(side.B);
+    if (!valid(chosen[1], ctx.side1) || !valid(chosen[2], ctx.side2)) throw new ServiceError("Each pair's Player A and B must be its two players");
+    return chosen;
+  }
+  return drawLineup(ctx.side1, ctx.side2);
+}
+
+/** Who plays the next frame: from the lineup, or as picked at the table (with each player's singles capped). */
+async function nextFramePlayers(
+  tx: Tx,
+  m: MatchRow,
+  ctx: FrameContext,
+  lineup: Lineup | null,
+  played: number,
+  picked?: { player1Id?: string; player2Id?: string },
+) {
+  const { kind } = frameAt(ctx.fmt, played);
+  if (!isSingles(kind)) return { player1Id: null, player2Id: null };
+  if (ctx.lineupMode !== "PICK_FRAME") return framePlayers(kind, lineup);
+
+  const p1 = picked?.player1Id;
+  const p2 = picked?.player2Id;
+  if (!p1 || !p2) throw new ServiceError("Choose who is playing this frame for each pair");
+  if (!ctx.side1.includes(p1) || !ctx.side2.includes(p2)) throw new ServiceError("Those players aren't in this match");
+  const previous = await tx.frame.findMany({ where: { matchId: m.id }, select: { player1Id: true, player2Id: true } });
+  const quota = singlesQuota(ctx.fmt);
+  if (previous.filter((f) => f.player1Id === p1).length >= quota || previous.filter((f) => f.player2Id === p2).length >= quota) {
+    throw new ServiceError(`Each player plays ${quota} singles frame${quota === 1 ? "" : "s"}: pick their partner`);
+  }
+  return { player1Id: p1, player2Id: p2 };
+}
+
+/**
+ * Score one rack/frame for a side. Completes the match when it's decided: a race reached,
+ * or for frame-list matches, a majority won or every frame played (possibly a draw).
+ * `picked` names the singles players when the pairs choose frame by frame.
+ */
+export async function addFrame(
+  matchId: string,
+  slot: 1 | 2,
+  breakAndRun = false,
+  picked?: { player1Id?: string; player2Id?: string },
+) {
   const match = await db.$transaction(async (tx) => {
     const m = await tx.match.findUniqueOrThrow({ where: { id: matchId }, include: { _count: { select: { frames: true } } } });
     if (m.status !== "READY" && m.status !== "LIVE") throw new ServiceError("This match can't be scored right now");
     if (!m.entry1Id || !m.entry2Id) throw new ServiceError("Both players must be known");
+    const ctx = await frameContext(tx, m);
 
-    // Scoring the first rack of a ready match starts it, which fixes its handicap.
+    // Scoring the first rack of a ready match starts it, which fixes its handicap (and order of play).
     const start = m.status === "READY" ? handicapColumns(await handicapFor(tx, m), m.raceTo) : null;
     const { target1, target2 } = matchTargets(start ? { ...start, raceTo: m.raceTo } : m);
+    const lineup = ctx ? (start ? startingLineup(ctx, null) : parseLineup(m.lineup)) : null;
+    const played = m._count.frames;
+    const players = ctx ? await nextFramePlayers(tx, m, ctx, lineup, played, picked) : {};
 
-    await tx.frame.create({ data: { matchId, number: m._count.frames + 1, winner: slot, breakAndRun } });
+    await tx.frame.create({ data: { matchId, number: played + 1, winner: slot, breakAndRun, ...players } });
     const score1 = (start ? start.handicap1 : m.score1) + (slot === 1 ? 1 : 0);
     const score2 = (start ? start.handicap2 : m.score2) + (slot === 2 ? 1 : 0);
     await tx.match.update({
       where: { id: matchId },
-      data: { ...(start ?? {}), score1, score2, status: "LIVE", startedAt: m.startedAt ?? new Date() },
+      data: {
+        ...(start ?? {}),
+        ...(start && lineup ? { lineup } : {}),
+        score1,
+        score2,
+        status: "LIVE",
+        startedAt: m.startedAt ?? new Date(),
+      },
     });
 
-    const finished = score1 >= target1 || score2 >= target2;
-    if (finished) {
-      const matches = await loadEngine(tx, m.tournamentId);
-      const changed = wrapEngine(() => completeMatch(matches, matchId, score1 >= target1 ? 1 : 2));
-      await persist(tx, matches, changed);
-      await refreshTournamentStatus(tx, m.tournamentId);
-    }
-    return { ...m, finished };
+    const outcome = ctx
+      ? frameOutcome(ctx.fmt, { score1, score2, played: played + 1, target1, target2 })
+      : score1 >= target1 || score2 >= target2
+        ? ({ done: true, winner: score1 >= target1 ? 1 : 2 } as const)
+        : ({ done: false } as const);
+    if (outcome.done) await finishMatch(tx, m, outcome.winner);
+    return { ...m, finished: outcome.done };
   });
   publish(match.tournamentId, [match.tableId]);
   if (match.finished) await autoPilot(match.tournamentId);
 }
 
-/** Mark a ready match as started, recording who breaks first. */
-export async function startMatch(matchId: string, breakSlot?: 1 | 2) {
+/** Mark a ready match as started, recording who breaks first (and, for frame-list matches, the order of play). */
+export async function startMatch(matchId: string, breakSlot?: 1 | 2, chosenLineup?: Lineup | null) {
   const m = await db.$transaction(async (tx) => {
     const m = await tx.match.findUniqueOrThrow({ where: { id: matchId } });
     if (m.status !== "READY") throw new ServiceError("This match isn't ready to start");
+    if (!m.entry1Id || !m.entry2Id) throw new ServiceError("Both players must be known");
+    const ctx = await frameContext(tx, m);
+    const lineup = ctx ? startingLineup(ctx, chosenLineup) : null;
     const start = handicapColumns(await handicapFor(tx, m), m.raceTo);
     await tx.match.update({
       where: { id: matchId },
-      data: { ...start, score1: start.handicap1, score2: start.handicap2, status: "LIVE", startedAt: new Date(), breakSlot },
+      data: {
+        ...start,
+        ...(lineup ? { lineup } : {}),
+        score1: start.handicap1,
+        score2: start.handicap2,
+        status: "LIVE",
+        startedAt: new Date(),
+        breakSlot,
+      },
     });
     return m;
   });
@@ -370,6 +539,19 @@ export async function undoFrame(matchId: string) {
   publish(match.tournamentId, [match.tableId]);
 }
 
+/** Check a directly entered frame-list result is one the format can produce; returns the winner (null = draw). */
+function frameResult(fmt: FrameFormat, s: { score1: number; score2: number; handicap1: number; handicap2: number; target1: number; target2: number }) {
+  const played = s.score1 - s.handicap1 + (s.score2 - s.handicap2);
+  const maxFrames = fmt.frames.length + (fmt.knockout ? 1 : 0);
+  const outcome = frameOutcome(fmt, { ...s, played });
+  const overshot = fmt.finish !== "ALL" && (s.score1 > s.target1 || s.score2 > s.target2 || (s.score1 >= s.target1 && s.score2 >= s.target2));
+  if (!outcome.done || played > maxFrames || overshot) {
+    const rule = fmt.finish === "ALL" ? `all ${fmt.frames.length} frames are played` : `first to ${s.target1 === s.target2 ? s.target1 : "their target"}`;
+    throw new ServiceError(`That score doesn't finish the match (${rule}${fmt.knockout ? ", with a decider if level" : ""})`);
+  }
+  return outcome.winner;
+}
+
 /** Organiser enters a final score directly (no frame-by-frame history). */
 export async function setResult(matchId: string, score1: number, score2: number) {
   const match = await db.$transaction(async (tx) => {
@@ -379,14 +561,21 @@ export async function setResult(matchId: string, score1: number, score2: number)
     const start = m.status === "READY" || m.status === "PENDING" ? handicapColumns(await handicapFor(tx, m), m.raceTo) : null;
     const h = start ?? m;
     const { target1, target2 } = matchTargets(start ? { ...start, raceTo: m.raceTo } : m);
-    const won1 = score1 === target1 && score2 < target2;
-    const won2 = score2 === target2 && score1 < target1;
-    if (!won1 && !won2) {
-      throw new ServiceError(
-        target1 === target2 ? `The winner must reach ${target1}` : `Player 1 needs ${target1} or player 2 needs ${target2} to win`,
-      );
-    }
     if (score1 < h.handicap1 || score2 < h.handicap2) throw new ServiceError("A score can't be below the player's start");
+    const ctx = await frameContext(tx, m);
+    let winner: 1 | 2 | null;
+    if (ctx) {
+      winner = frameResult(ctx.fmt, { score1, score2, handicap1: h.handicap1, handicap2: h.handicap2, target1, target2 });
+    } else {
+      const won1 = score1 === target1 && score2 < target2;
+      const won2 = score2 === target2 && score1 < target1;
+      if (!won1 && !won2) {
+        throw new ServiceError(
+          target1 === target2 ? `The winner must reach ${target1}` : `Player 1 needs ${target1} or player 2 needs ${target2} to win`,
+        );
+      }
+      winner = won1 ? 1 : 2;
+    }
     const matches = await loadEngine(tx, m.tournamentId);
     if (m.status === "COMPLETED") {
       const changed = wrapEngine(() => reopenMatch(matches, matchId));
@@ -401,7 +590,7 @@ export async function setResult(matchId: string, score1: number, score2: number)
     fresh.score1 = score1;
     fresh.score2 = score2;
     fresh.status = "LIVE";
-    const changed = wrapEngine(() => completeMatch(matches, matchId, won1 ? 1 : 2));
+    const changed = wrapEngine(() => (winner ? completeMatch(matches, matchId, winner) : completeDraw(matches, matchId)));
     await persist(tx, matches, changed);
     await refreshTournamentStatus(tx, m.tournamentId);
     return m;
@@ -422,11 +611,14 @@ export async function assignTable(matchId: string, tableId: string | null) {
   publish(m.tournamentId, [m.tableId, tableId]);
 }
 
-/** Put the next ready matches on any free tables at the tournament's venue. */
+/**
+ * Put the next ready matches on any free tables at the tournament's venue. A group with its
+ * own table plays only there, in order; once its matches are done the table is free for others.
+ */
 export async function autoAssignTables(tournamentId: string) {
   const t = await db.tournament.findUniqueOrThrow({
     where: { id: tournamentId },
-    include: { venue: { include: { tables: { orderBy: { sortOrder: "asc" } } } } },
+    include: { venue: { include: { tables: { orderBy: { sortOrder: "asc" } } } }, groups: true },
   });
   if (!t.venue) throw new ServiceError("Set a venue for this tournament first");
   const busy = await db.match.findMany({
@@ -438,11 +630,21 @@ export async function autoAssignTables(tournamentId: string) {
   const waiting = await db.match.findMany({
     where: { tournamentId, status: "READY", tableId: null },
     orderBy: [{ round: "asc" }, { bracket: "desc" }, { position: "asc" }],
-    take: free.length,
   });
-  for (let i = 0; i < waiting.length; i++) {
-    await db.match.update({ where: { id: waiting[i].id }, data: { tableId: free[i].id } });
+  const groupOfTable = new Map(t.groups.filter((g) => g.tableId).map((g) => [g.tableId!, g.id]));
+  const hasOwnTable = new Set(groupOfTable.values());
+  const used = new Set<string>();
+  const assigned: string[] = [];
+  for (const table of free) {
+    const groupId = groupOfTable.get(table.id);
+    const pick =
+      (groupId && waiting.find((m) => !used.has(m.id) && m.groupId === groupId)) ||
+      waiting.find((m) => !used.has(m.id) && !(m.groupId && hasOwnTable.has(m.groupId)));
+    if (!pick) continue;
+    used.add(pick.id);
+    await db.match.update({ where: { id: pick.id }, data: { tableId: table.id } });
+    assigned.push(table.id);
   }
-  publish(tournamentId, free.slice(0, waiting.length).map((f) => f.id));
-  return waiting.length;
+  publish(tournamentId, assigned);
+  return assigned.length;
 }

@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { requireUser } from "@/lib/auth";
 import { entryNames, getTournamentFull } from "@/lib/queries";
-import { groupsWithStandings } from "@/lib/views";
+import { groupsWithStandings, raceText } from "@/lib/views";
 import { BracketView } from "@/components/tournament/bracket";
 import { GroupTable } from "@/components/tournament/group-tables";
 import { MatchList } from "@/components/tournament/match-list";
@@ -29,16 +29,26 @@ async function AdminBracket({ params }: { params: PageProps<"/admin/tournaments/
 
   return (
     <div className="space-y-8">
-      {groups.map(({ group, rows, matches }) => (
+      {groups.map(({ group, rows, matches, shootouts }) => (
         <div key={group.id} className="grid gap-4 lg:grid-cols-2">
-          <GroupTable name={group.name} rows={rows} names={names} qualifiers={t.format === "GROUPS_KO" ? t.qualifiersPerGroup ?? 2 : 0} />
+          <GroupTable
+            name={group.name}
+            rows={rows}
+            names={names}
+            qualifiers={t.format === "GROUPS_KO" ? t.qualifiersPerGroup ?? 2 : 0}
+            plate={t.format === "GROUPS_KO" ? t.plateQualifiers ?? 0 : 0}
+            showDraws={t.matchFrames.length > 0}
+            entity={t.entryType === "PAIRS" ? "Pair" : "Player"}
+            tableName={group.table?.name}
+            shootoutNeeded={shootouts.length > 0}
+          />
           <Card>
             <CardHeader title={`${group.name} matches`} />
             <MatchList matches={matches} names={names} linkFor={linkFor} />
           </Card>
         </div>
       ))}
-      {ko.length > 0 && <BracketView matches={ko} names={names} linkFor={linkFor} />}
+      {ko.length > 0 && <BracketView matches={ko} names={names} linkFor={linkFor} raceText={raceText(t)} />}
     </div>
   );
 }

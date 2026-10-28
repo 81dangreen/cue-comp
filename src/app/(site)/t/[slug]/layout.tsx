@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { DISCIPLINES, FORMATS, TOURNAMENT_STATUS, type Discipline, type Format, type TournamentStatus } from "@/lib/constants";
 import { HANDICAP_STYLES, type HandicapStyle } from "@/lib/handicap";
 import { getTournamentFull } from "@/lib/queries";
+import { formatSummary } from "@/lib/views";
 import { LiveRefresher } from "@/components/live-refresher";
 import { TabNav } from "@/components/tab-nav";
 import { Badge, Card, Skeleton } from "@/components/ui";
@@ -25,11 +26,12 @@ async function Header({ params }: { params: LayoutProps<"/t/[slug]">["params"] }
   const base = `/t/${t.slug}`;
   const confirmed = t.entries.filter((e) => e.status === "CONFIRMED").length;
   const hasDraw = t.matches.length > 0;
+  const pairs = t.entryType === "PAIRS";
   const facts: [string, string][] = [
     ["Discipline", DISCIPLINES[t.discipline as Discipline] ?? t.discipline],
-    ["Format", FORMATS[t.format as Format] ?? t.format],
-    ["Race to", t.raceToFinal ? `${t.raceTo} (final ${t.raceToFinal})` : String(t.raceTo)],
-    ["Players", t.maxEntries ? `${confirmed} / ${t.maxEntries}` : String(confirmed)],
+    ["Format", `${FORMATS[t.format as Format] ?? t.format}${pairs ? " · pairs" : ""}${t.plateQualifiers ? " + plate" : ""}`],
+    ["Matches", formatSummary(t)],
+    [pairs ? "Pairs" : "Players", t.maxEntries ? `${confirmed} / ${t.maxEntries}` : String(confirmed)],
     ["Entry fee", t.entryFee || "None"],
     ...(t.handicapStyle ? ([["Handicap", HANDICAP_STYLES[t.handicapStyle as HandicapStyle] ?? "Yes"]] as [string, string][]) : []),
   ];
@@ -68,7 +70,7 @@ async function Header({ params }: { params: LayoutProps<"/t/[slug]">["params"] }
             { href: base, label: "Overview" },
             ...(hasDraw ? [{ href: `${base}/bracket`, label: t.groups.length ? "Groups & bracket" : "Bracket" }] : []),
             ...(hasDraw ? [{ href: `${base}/matches`, label: "Matches" }] : []),
-            { href: `${base}/players`, label: "Players" },
+            { href: `${base}/players`, label: pairs ? "Pairs" : "Players" },
           ]}
         />
       </div>
