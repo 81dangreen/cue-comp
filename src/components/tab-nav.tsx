@@ -34,8 +34,8 @@ function Tabs({ tabs, pathname }: { tabs: Tab[]; pathname: string | null }) {
             key={tab.href}
             href={tab.href}
             className={cx(
-              "whitespace-nowrap border-b-[3px] px-4 py-3 text-[15px] font-semibold transition",
-              active ? "border-accent text-accent" : "border-transparent text-muted hover:border-border hover:text-foreground",
+              "whitespace-nowrap border-b-4 px-4 py-3 font-display text-lg font-bold tracking-wide uppercase transition",
+              active ? "border-pop text-foreground" : "border-transparent text-muted hover:border-border hover:text-foreground",
             )}
           >
             {tab.label}

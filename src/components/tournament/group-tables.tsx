@@ -28,9 +28,9 @@ export function GroupTable({
   const draws = showDraws || rows.some((r) => r.drawn > 0);
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
-      <div className="flex items-center justify-between gap-2 bg-header px-4 py-2.5 text-header-fg">
-        <span className="font-semibold">{name}</span>
-        {tableName && <span className="text-sm text-header-fg/75">{tableName}</span>}
+      <div className="bg-felt flex items-center justify-between gap-2 px-4 py-2.5">
+        <span className="font-display text-xl font-bold tracking-wide uppercase">{name}</span>
+        {tableName && <span className="rounded-full bg-white/15 px-3 py-0.5 text-sm font-semibold">{tableName}</span>}
       </div>
       <table className="w-full text-[15px] whitespace-nowrap">
         <thead className="bg-surface-2 text-xs text-muted">
@@ -43,7 +43,7 @@ export function GroupTable({
             <th className="px-2 py-2 text-right font-medium" title="Lost">L</th>
             <th className="px-2 py-2 text-right font-medium" title="Frames for–against">F–A</th>
             <th className="px-2 py-2 text-right font-medium" title="Frame difference">+/−</th>
-            <th className="px-3 py-2 text-right font-medium" title="Points">Pts</th>
+            <th className="px-3 py-2 text-right font-semibold text-foreground" title="Points">Pts</th>
           </tr>
         </thead>
         <tbody>
@@ -71,7 +71,7 @@ export function GroupTable({
                 {r.framesFor}–{r.framesAgainst}
               </td>
               <td className="px-2 py-2 text-right tabular-nums">{r.frameDiff > 0 ? `+${r.frameDiff}` : r.frameDiff}</td>
-              <td className="px-3 py-2 text-right font-bold tabular-nums">{r.points}</td>
+              <td className="px-3 py-2 text-right font-display text-xl font-bold tabular-nums">{r.points}</td>
             </tr>
           ))}
         </tbody>

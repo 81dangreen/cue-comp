@@ -4,7 +4,7 @@
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 :root {
-  --background: #eef1f5;
+  --background: #edf0ec;
   --surface: #ffffff;
   --surface-2: #f3f5f8;
   --border: #d3d9e1;
@@ -18,6 +18,11 @@
   --warn: #9a4a00;
   --header: #0c3a2c;
   --header-fg: #ffffff;
+  /* 9-ball yellow: the one colour that grabs attention (next up, active tab, highlights). */
+  --pop: #f5c518;
+  --pop-fg: #1c1600;
+  /* Lamp-lit baize for headers: brighter in the middle, falling off to the rails. */
+  --felt: radial-gradient(120% 140% at 50% -30%, #1f8a5f 0%, #10573d 42%, #0a3628 100%);
 }
 
 :root[data-theme="dark"] {
@@ -35,6 +40,9 @@
   --warn: #fbbf4a;
   --header: #0b241c;
   --header-fg: #f2f5f8;
+  --pop: #f7cf3b;
+  --pop-fg: #1c1600;
+  --felt: radial-gradient(120% 140% at 50% -30%, #17694a 0%, #0d4531 45%, #072519 100%);
 }
 
 @theme inline {
@@ -52,8 +60,19 @@
   --color-warn: var(--warn);
   --color-header: var(--header);
   --color-header-fg: var(--header-fg);
+  --color-pop: var(--pop);
+  --color-pop-fg: var(--pop-fg);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-barlow-condensed);
+}
+
+/* Baize panel: the felt gradient with a faint cloth weave. */
+.bg-felt {
+  background-image:
+    repeating-linear-gradient(45deg, rgb(255 255 255 / 0.018) 0 2px, transparent 2px 5px),
+    var(--felt);
+  color: var(--header-fg);
 }
 
 html {

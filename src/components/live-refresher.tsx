@@ -16,11 +16,14 @@ export function LiveRefresher({
   tableId,
   quiet,
   banner,
+  onDark,
 }: {
   tournamentId?: string;
   tableId?: string;
   quiet?: boolean;
   banner?: boolean;
+  /** Light text for use on felt headers. */
+  onDark?: boolean;
 }) {
   const router = useRouter();
   // null until the first connection attempt resolves, so nothing flashes on load.
@@ -64,8 +67,11 @@ export function LiveRefresher({
   }
   if (quiet) return null;
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs text-muted" title={connected ? "Live updates on" : "Reconnecting…"}>
-      <span className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-accent" : "bg-muted"}`} />
+    <span
+      className={`inline-flex items-center gap-1.5 text-xs ${onDark ? "text-white/75" : "text-muted"}`}
+      title={connected ? "Live updates on" : "Reconnecting…"}
+    >
+      <span className={`h-1.5 w-1.5 rounded-full ${connected ? (onDark ? "bg-pop" : "bg-accent") : "bg-muted"}`} />
       {connected ? "Live" : connected === null ? "Connecting" : "Offline"}
     </span>
   );

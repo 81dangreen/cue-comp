@@ -31,7 +31,12 @@ function Section({
 
   return (
     <section className="mb-10">
-      {title && <h2 className="mb-4 text-xl font-semibold">{title}</h2>}
+      {title && (
+        <h2 className="mb-4 flex items-center gap-2.5 font-display text-2xl font-bold tracking-wide uppercase">
+          <span className="h-6 w-1.5 rounded-full bg-pop" aria-hidden />
+          {title}
+        </h2>
+      )}
       <div className="overflow-x-auto pb-3">
         <div className="flex min-w-max gap-12">
           {byRound.map((inRound, ri) => {
@@ -43,9 +48,11 @@ function Section({
             const incoming = prev !== undefined && (prev === count * 2 || prev === count);
             return (
               <div key={rounds[ri]} className="flex w-60 flex-col">
-                <div className="mb-3 rounded-lg bg-header px-3 py-2 text-header-fg">
-                  <div className="text-sm font-semibold">{roundLabel(inRound[0].bracket, rounds[ri], total, { doubleElim })}</div>
-                  <div className="text-xs text-header-fg/75">{raceText(inRound[0])}</div>
+                <div className="bg-felt mb-3 rounded-lg px-3 py-2">
+                  <div className="font-display text-lg leading-tight font-bold tracking-wide uppercase">
+                    {roundLabel(inRound[0].bracket, rounds[ri], total, { doubleElim })}
+                  </div>
+                  <div className="text-xs text-white/70">{raceText(inRound[0])}</div>
                 </div>
                 <div className="flex flex-1 flex-col">
                   {inRound.map((m, i) => (

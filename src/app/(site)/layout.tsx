@@ -27,10 +27,10 @@ async function UserNav() {
 export default function SiteLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
-      <header className="bg-header text-header-fg shadow-sm">
+      <header className="bg-felt border-b-4 border-pop shadow-sm">
         <div className="mx-auto flex h-16 max-w-7xl items-center gap-2 px-4">
-          <Link href="/" className="mr-4 flex items-center gap-2.5 text-lg font-bold tracking-tight">
-            <LogoMark className="h-9 w-9" />
+          <Link href="/" className="mr-4 flex items-center gap-2.5 font-display text-2xl font-bold tracking-wide uppercase">
+            <LogoMark className="h-10 w-10" />
             {APP_NAME}
           </Link>
           <nav className="hidden sm:block">
