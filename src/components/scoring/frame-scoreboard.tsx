@@ -12,6 +12,7 @@ import {
   type Lineup,
 } from "@/lib/match-format";
 import type { FramePick } from "@/actions/matches";
+import { DISHES, type Dish } from "@/lib/constants";
 import type { ActionResult } from "../forms";
 import { cx } from "../ui";
 
@@ -42,7 +43,7 @@ export type FrameMatchProps = {
   frames: { number: number; winner: number; player1Id: string | null; player2Id: string | null }[];
   /** Ask before saving the frame that decides the match (players score their own matches on tablets). */
   confirmFinish?: boolean;
-  addFrame: (slot: 1 | 2, breakAndRun: boolean, picked?: FramePick) => Promise<ActionResult>;
+  addFrame: (slot: 1 | 2, dish: Dish | null, picked?: FramePick) => Promise<ActionResult>;
   undo: () => Promise<ActionResult>;
 };
 
@@ -61,7 +62,7 @@ const breakerOf = (breakSlot: number | null | undefined, frameNumber: number) =>
 export function FrameScoreboard(props: FrameMatchProps) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [breakAndRun, setBreakAndRun] = useState(false);
+  const [dish, setDish] = useState<Dish | null>(null);
   const [picked, setPicked] = useState<FramePick>({});
   const [finishing, setFinishing] = useState<1 | 2 | null>(null);
 
@@ -94,10 +95,10 @@ export function FrameScoreboard(props: FrameMatchProps) {
   function send(slot: 1 | 2) {
     setError(null);
     startTransition(async () => {
-      const res = await props.addFrame(slot, breakAndRun, pickEach ? picked : undefined);
+      const res = await props.addFrame(slot, dish, pickEach ? picked : undefined);
       if (res?.error) setError(res.error);
       else {
-        setBreakAndRun(false);
+        setDish(null);
         setPicked({});
       }
     });
@@ -246,10 +247,23 @@ export function FrameScoreboard(props: FrameMatchProps) {
                 </button>
               ))}
             </div>
-            <label className="mx-auto flex items-center gap-2 text-sm text-white/75">
-              <input type="checkbox" checked={breakAndRun} onChange={(e) => setBreakAndRun(e.target.checked)} className="h-5 w-5" />
-              Break &amp; run (dish)
-            </label>
+            {/* Mark the frame before tapping its winner; tap again to clear. */}
+            <div className="mx-auto flex flex-wrap justify-center gap-2" role="group" aria-label="Won in one visit">
+              {(Object.keys(DISHES) as Dish[]).map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  aria-pressed={dish === d}
+                  onClick={() => setDish(dish === d ? null : d)}
+                  className={cx(
+                    "rounded-full border px-4 py-2 text-sm font-semibold",
+                    dish === d ? "border-white bg-white text-black" : "border-white/20 bg-white/5 text-white/75 active:bg-white/15",
+                  )}
+                >
+                  {DISHES[d]}
+                </button>
+              ))}
+            </div>
           </>
         )}
       </div>

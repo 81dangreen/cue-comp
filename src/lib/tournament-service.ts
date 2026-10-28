@@ -1,6 +1,7 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
+import type { Dish } from "./constants";
 import { db } from "./db";
 import { publish } from "./events";
 import {
@@ -438,12 +439,12 @@ async function nextFramePlayers(
 /**
  * Score one rack/frame for a side. Completes the match when it's decided: a race reached,
  * or for frame-list matches, a majority won or every frame played (possibly a draw).
- * `picked` names the singles players when the pairs choose frame by frame.
+ * `dish` records a rack won in one visit; `picked` names the singles players when the pairs choose frame by frame.
  */
 export async function addFrame(
   matchId: string,
   slot: 1 | 2,
-  breakAndRun = false,
+  dish: Dish | null = null,
   picked?: { player1Id?: string; player2Id?: string },
 ) {
   const match = await db.$transaction(async (tx) => {
@@ -459,7 +460,9 @@ export async function addFrame(
     const played = m._count.frames;
     const players = ctx ? await nextFramePlayers(tx, m, ctx, lineup, played, picked) : {};
 
-    await tx.frame.create({ data: { matchId, number: played + 1, winner: slot, breakAndRun, ...players } });
+    await tx.frame.create({
+      data: { matchId, number: played + 1, winner: slot, breakAndRun: dish === "BREAK", reverseDish: dish === "REVERSE", ...players },
+    });
     const score1 = (start ? start.handicap1 : m.score1) + (slot === 1 ? 1 : 0);
     const score2 = (start ? start.handicap2 : m.score2) + (slot === 2 ? 1 : 0);
     await tx.match.update({

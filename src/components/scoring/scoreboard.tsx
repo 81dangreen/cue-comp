@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useOptimistic, useState, useTransition } from "react";
+import type { Dish } from "@/lib/constants";
 import type { ActionResult } from "../forms";
 import { cx } from "../ui";
 
@@ -29,10 +30,10 @@ type Props = {
   /** e.g. "Sam starts 1 up"; shown under the header. */
   handicapNote?: string | null;
   canUndo: boolean;
-  frames: { winner: number; breakAndRun: boolean }[];
+  frames: { winner: number; breakAndRun: boolean; reverseDish: boolean }[];
   /** Ask before saving the rack that wins the match (players score their own matches on tablets). */
   confirmFinish?: boolean;
-  addFrame: (slot: 1 | 2, breakAndRun: boolean) => Promise<ActionResult>;
+  addFrame: (slot: 1 | 2, dish: Dish | null) => Promise<ActionResult>;
   undo: () => Promise<ActionResult>;
 };
 
@@ -44,7 +45,7 @@ const SIDE = {
 export function Scoreboard(props: Props) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [finishing, setFinishing] = useState<{ slot: 1 | 2; breakAndRun: boolean } | null>(null);
+  const [finishing, setFinishing] = useState<{ slot: 1 | 2; dish: Dish | null } | null>(null);
   const [score, addOptimistic] = useOptimistic(
     { s1: props.score1, s2: props.score2 },
     (state, delta: { slot: 1 | 2; by: number }) => ({
@@ -59,23 +60,23 @@ export function Scoreboard(props: Props) {
   const target = (slot: 1 | 2) => (slot === 1 ? props.target1 : props.target2) ?? props.raceTo;
   const evenRace = target(1) === target(2);
 
-  function send(slot: 1 | 2, breakAndRun: boolean) {
+  function send(slot: 1 | 2, dish: Dish | null) {
     setError(null);
     startTransition(async () => {
       addOptimistic({ slot, by: 1 });
-      const res = await props.addFrame(slot, breakAndRun);
+      const res = await props.addFrame(slot, dish);
       if (res?.error) setError(res.error);
     });
   }
 
-  function scoreRack(slot: 1 | 2, breakAndRun = false) {
+  function scoreRack(slot: 1 | 2, dish: Dish | null = null) {
     if (!scorable || pending) return;
     const next = (slot === 1 ? score.s1 : score.s2) + 1;
     if (props.confirmFinish && next >= target(slot)) {
-      setFinishing({ slot, breakAndRun });
+      setFinishing({ slot, dish });
       return;
     }
-    send(slot, breakAndRun);
+    send(slot, dish);
   }
 
   function undo() {
@@ -132,13 +133,22 @@ export function Scoreboard(props: Props) {
           </span>
         </button>
         {scorable && (
-          <button
-            type="button"
-            onClick={() => scoreRack(slot, true)}
-            className="mt-2 rounded-xl border border-white/10 bg-white/5 py-3 text-sm font-medium text-white/75 active:bg-white/15"
-          >
-            + Break &amp; run
-          </button>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => scoreRack(slot, "BREAK")}
+              className="rounded-xl border border-white/10 bg-white/5 py-3 text-sm font-medium text-white/75 active:bg-white/15"
+            >
+              + Break &amp; run
+            </button>
+            <button
+              type="button"
+              onClick={() => scoreRack(slot, "REVERSE")}
+              className="rounded-xl border border-white/10 bg-white/5 py-3 text-sm font-medium text-white/75 active:bg-white/15"
+            >
+              + Reverse dish
+            </button>
+          </div>
         )}
       </div>
     );
@@ -190,11 +200,12 @@ export function Scoreboard(props: Props) {
           {props.frames.map((f, i) => (
             <span
               key={i}
-              title={`Rack ${i + 1}: ${name(f.winner as 1 | 2)}${f.breakAndRun ? " (break & run)" : ""}`}
+              title={`Rack ${i + 1}: ${name(f.winner as 1 | 2)}${f.breakAndRun ? " (break & run)" : f.reverseDish ? " (reverse dish)" : ""}`}
               className={cx(
                 "grid h-7 w-7 shrink-0 place-items-center rounded-md text-xs font-bold",
                 SIDE[f.winner as 1 | 2].chip,
                 f.breakAndRun && "ring-2 ring-white/70",
+                f.reverseDish && "outline-2 outline-offset-1 outline-dashed outline-white/70",
               )}
             >
               {i + 1}
@@ -237,7 +248,7 @@ export function Scoreboard(props: Props) {
               <button
                 type="button"
                 onClick={() => {
-                  send(finishing.slot, finishing.breakAndRun);
+                  send(finishing.slot, finishing.dish);
                   setFinishing(null);
                 }}
                 className="rounded-xl bg-emerald-400 py-4 text-lg font-bold text-black active:bg-emerald-300"

@@ -23,7 +23,7 @@ async function playMatch(matchId: string, raceTo: number) {
     ...Array<1 | 2>(loserScore).fill(winner === 1 ? 2 : 1),
   ].sort(() => Math.random() - 0.5);
   racks.push(winner);
-  for (const slot of racks) await addFrame(matchId, slot, Math.random() < 0.08);
+  for (const slot of racks) await addFrame(matchId, slot, Math.random() < 0.08 ? "BREAK" : null);
 }
 
 async function playReady(tournamentId: string, limit = Infinity) {

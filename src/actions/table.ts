@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { forgetDevice, pairDevice, requireDeviceMatch } from "@/lib/device";
+import { isDish, type Dish } from "@/lib/constants";
 import type { Lineup } from "@/lib/match-format";
 import { clientIp, limitAttempts } from "@/lib/rate-limit";
 import { addFrame, startMatch, undoFrame } from "@/lib/tournament-service";
@@ -34,11 +35,11 @@ export async function tableStartMatchAction(matchId: string, breakSlot: 1 | 2, l
   });
 }
 
-export async function tableAddFrameAction(matchId: string, slot: 1 | 2, breakAndRun = false, picked?: FramePick) {
+export async function tableAddFrameAction(matchId: string, slot: 1 | 2, dish: Dish | null = null, picked?: FramePick) {
   return run(async () => {
     const { match } = await requireDeviceMatch(matchId);
     if (match.status !== "LIVE") throw new Error("Start the match first");
-    await addFrame(matchId, slot, breakAndRun, picked);
+    await addFrame(matchId, slot, isDish(dish) ? dish : null, picked);
   });
 }
 

@@ -242,6 +242,8 @@ model Frame {
   number      Int
   winner      Int // 1 or 2
   breakAndRun Boolean  @default(false)
+  // The player who didn't break cleared the table on their first visit.
+  reverseDish Boolean  @default(false)
   // Frame-list matches: who played a singles frame for each side (null in doubles).
   player1Id   String?
   player2Id   String?

@@ -1,6 +1,7 @@
 "use server";
 
 import { requireMatch } from "@/lib/auth";
+import { isDish, type Dish } from "@/lib/constants";
 import type { Lineup } from "@/lib/match-format";
 import { addFrame, assignTable, setResult, startMatch, undoFrame } from "@/lib/tournament-service";
 import type { ActionResult } from "@/components/forms";
@@ -9,10 +10,10 @@ import { run } from "./util";
 /** Players named for a frame when pairs pick frame by frame. */
 export type FramePick = { player1Id?: string; player2Id?: string };
 
-export async function addFrameAction(matchId: string, slot: 1 | 2, breakAndRun = false, picked?: FramePick) {
+export async function addFrameAction(matchId: string, slot: 1 | 2, dish: Dish | null = null, picked?: FramePick) {
   return run(async () => {
     await requireMatch(matchId);
-    await addFrame(matchId, slot, breakAndRun, picked);
+    await addFrame(matchId, slot, isDish(dish) ? dish : null, picked);
   });
 }
 

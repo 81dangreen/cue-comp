@@ -142,7 +142,7 @@ async function Score({ params }: { params: PageProps<"/score/[matchId]">["params
         winnerSlot={match.winnerId ? (match.winnerId === match.entry1Id ? 1 : 2) : null}
         breakSlot={match.breakSlot}
         canUndo={match.frames.length > 0}
-        frames={match.frames.map((f) => ({ winner: f.winner, breakAndRun: f.breakAndRun }))}
+        frames={match.frames.map((f) => ({ winner: f.winner, breakAndRun: f.breakAndRun, reverseDish: f.reverseDish }))}
         addFrame={addFrameAction.bind(null, match.id)}
         undo={undoFrameAction.bind(null, match.id)}
       />

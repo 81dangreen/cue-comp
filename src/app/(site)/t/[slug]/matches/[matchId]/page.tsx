@@ -93,6 +93,7 @@ async function MatchDetail({ params }: { params: PageProps<"/t/[slug]/matches/[m
                       <>
                         {team(f.winner as 1 | 2)}
                         {f.breakAndRun && <span className="ml-1 text-xs text-accent">(dish)</span>}
+                        {f.reverseDish && <span className="ml-1 text-xs text-accent">(reverse dish)</span>}
                       </>
                     ) : (
                       "–"

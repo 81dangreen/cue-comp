@@ -43,5 +43,14 @@ export const ROLES = {
 } as const;
 export type Role = keyof typeof ROLES;
 
+/** How a rack was won in one visit: the breaker cleared it, or the other player cleared it on their first visit. */
+export const DISHES = {
+  BREAK: "Break & run (dish)",
+  REVERSE: "Reverse dish",
+} as const;
+export type Dish = keyof typeof DISHES;
+
+export const isDish = (v: unknown): v is Dish => typeof v === "string" && v in DISHES;
+
 // Snooker and carom score frames/points differently, but "race to N frames" covers phase 1.
 export const frameWord = (discipline: string) => (discipline === "SNOOKER" ? "frames" : "racks");

@@ -115,7 +115,7 @@ async function TableScreen({ searchParams }: { searchParams: PageProps<"/table">
           rank2={rank(current.entry2Id)}
           handicapNote={handicapNote}
           canUndo={current.frames.length > 0}
-          frames={current.frames.map((f) => ({ winner: f.winner, breakAndRun: f.breakAndRun }))}
+          frames={current.frames.map((f) => ({ winner: f.winner, breakAndRun: f.breakAndRun, reverseDish: f.reverseDish }))}
           confirmFinish
           addFrame={tableAddFrameAction.bind(null, current.id)}
           undo={tableUndoFrameAction.bind(null, current.id)}
