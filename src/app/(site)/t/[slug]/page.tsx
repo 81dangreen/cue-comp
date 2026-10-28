@@ -5,9 +5,10 @@ import { Suspense } from "react";
 import { registerForTournament } from "@/actions/tournaments";
 import { entryNames, getTournamentFull } from "@/lib/queries";
 import { ordinal } from "@/lib/results";
-import { matchCounts, matchLabels, placings, raceText } from "@/lib/views";
+import { matchCounts, matchLabels, orderOfPlay, placings, raceText } from "@/lib/views";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { MatchCard } from "@/components/tournament/match-card";
+import { OrderOfPlay } from "@/components/tournament/order-of-play";
 import { Card, CardHeader, EmptyState, Field, Input, PageSkeleton, SectionTitle } from "@/components/ui";
 
 export async function generateMetadata({ params }: PageProps<"/t/[slug]">): Promise<Metadata> {
@@ -30,12 +31,10 @@ async function Overview({ params }: { params: PageProps<"/t/[slug]">["params"] }
   if (!t || !t.isPublic) notFound();
   const names = entryNames(t.entries);
   const labels = matchLabels(t.matches, t.groups);
-  const live = t.matches.filter((m) => m.status === "LIVE");
-  // Matches already called to a table come first.
-  const upNext = t.matches
-    .filter((m) => m.status === "READY")
-    .sort((a, b) => Number(!!b.tableId) - Number(!!a.tableId))
-    .slice(0, 8);
+  const order = orderOfPlay(t);
+  // Matches on a group's own table appear in that table's running order instead.
+  const onGroupTables = new Set(order.tables.flatMap((g) => g.matches.map((m) => m.id)));
+  const live = t.matches.filter((m) => m.status === "LIVE" && !onGroupTables.has(m.id));
   const recent = t.matches
     .filter((m) => m.status === "COMPLETED" && !m.isBye)
     .sort((a, b) => +(b.completedAt ?? 0) - +(a.completedAt ?? 0))
@@ -71,10 +70,10 @@ async function Overview({ params }: { params: PageProps<"/t/[slug]">["params"] }
           </section>
         )}
 
-        {upNext.length > 0 && (
+        {(order.tables.length > 0 || order.queue.length > 0) && (
           <section>
-            <SectionTitle>Up next</SectionTitle>
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{upNext.map(card)}</div>
+            <SectionTitle>Order of play</SectionTitle>
+            <OrderOfPlay order={order} names={names} labels={labels} hrefFor={(m) => `/t/${t.slug}/matches/${m.id}`} />
           </section>
         )}
 

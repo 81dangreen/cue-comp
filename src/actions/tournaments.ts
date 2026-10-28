@@ -239,18 +239,23 @@ export async function addEntries(tournamentId: string, _prev: ActionResult, form
   });
 }
 
-/** Find a directory player by id, or add a new one typed by name (refusing a name already listed). */
-async function pairMember(organizationId: string, id: string, name: string) {
+/**
+ * Check one member of a pair without saving anything: an existing directory player, or a new
+ * name that isn't already listed. Nothing is created until both members pass.
+ */
+async function checkPairMember(slot: number, id: string, name: string) {
   if (id) {
     const p = await db.player.findUnique({ where: { id } });
     if (!p) throw new Error("Player not found");
-    return p;
+    return { id: p.id, firstName: p.firstName, lastName: p.lastName };
   }
   const [firstName, ...rest] = name.split(/\s+/);
-  if (!firstName || !rest.length) throw new Error("Choose both players, or type a new player's first and last name");
+  if (!firstName || !rest.length) throw new Error(`Player ${slot}: choose them from the list, or type a new player's first and last name`);
   const matches = await sameNamePlayers(firstName, rest.join(" "));
-  if (matches.length) throw new Error(`${name} is already in the player directory (${describeMatches(matches)}). Search for them instead.`);
-  return db.player.create({ data: { firstName, lastName: rest.join(" "), organizationId } });
+  if (matches.length) {
+    throw new Error(`Player ${slot}: ${name} is already in the player directory (${describeMatches(matches)}). Pick them from the list instead.`);
+  }
+  return { id: null, firstName, lastName: rest.join(" ") };
 }
 
 /** Pairs comps: enter two players as one entry, optionally with a team name and handicap group. */
@@ -274,10 +279,20 @@ export async function addPair(tournamentId: string, _prev: ActionResult, formDat
     for (const id of [field("player1Id"), field("player2Id")]) {
       if (id && entered.has(id)) throw new Error("One of those players is already in a pair in this comp");
     }
-    const p1 = await pairMember(user.organizationId, field("player1Id"), field("newPlayer1"));
-    const p2 = await pairMember(user.organizationId, field("player2Id"), field("newPlayer2"));
-    await db.entry.create({
-      data: { tournamentId, playerId: p1.id, partnerId: p2.id, teamName: field("teamName") || null, rank, status: "CONFIRMED" },
+    const p1 = await checkPairMember(1, field("player1Id"), field("newPlayer1"));
+    const p2 = await checkPairMember(2, field("player2Id"), field("newPlayer2"));
+    if (!p1.id && !p2.id && `${p1.firstName} ${p1.lastName}`.toLowerCase() === `${p2.firstName} ${p2.lastName}`.toLowerCase()) {
+      throw new Error("Choose two different players");
+    }
+    // New players are added to the directory only together with the pair, so a refused pair leaves nothing behind.
+    await db.$transaction(async (tx) => {
+      const save = async (p: typeof p1) =>
+        p.id ?? (await tx.player.create({ data: { firstName: p.firstName, lastName: p.lastName, organizationId: user.organizationId } })).id;
+      const playerId = await save(p1);
+      const partnerId = await save(p2);
+      await tx.entry.create({
+        data: { tournamentId, playerId, partnerId, teamName: field("teamName") || null, rank, status: "CONFIRMED" },
+      });
     });
     publish(tournamentId);
     return `Added ${p1.firstName} ${p1.lastName} & ${p2.firstName} ${p2.lastName}`;

@@ -27,8 +27,24 @@ export function PairPicker({ players }: { players: Option[] }) {
   const q = query.trim().toLowerCase();
   const taken = new Set(chosen.map((c) => c?.id));
   const shown = players.filter((p) => !taken.has(p.id) && (!q || `${p.name} ${p.detail ?? ""}`.toLowerCase().includes(q)));
+  /**
+   * Which slot a picked player fills: an open slot with nothing typed in it, else the open slot
+   * whose typed name matches them (e.g. after "Player 2 is already in the directory"), else the first open one.
+   */
+  const targetSlot = (p: Option): 0 | 1 => {
+    const typed = (i: number) =>
+      (ref.current?.querySelector<HTMLInputElement>(`input[name="newPlayer${i + 1}"]`)?.value ?? "").trim().toLowerCase();
+    const open = ([0, 1] as const).filter((i) => !chosen[i]);
+    const name = p.name.toLowerCase();
+    return (
+      open.find((i) => typed(i) && (name.includes(typed(i)) || typed(i).includes(name))) ??
+      open.find((i) => !typed(i)) ??
+      open[0]
+    );
+  };
   const pick = (p: Option) => {
-    setChosen(chosen[0] ? [chosen[0], p] : [p, chosen[1]]);
+    const slot = targetSlot(p);
+    setChosen(slot === 0 ? [p, chosen[1]] : [chosen[0], p]);
     setQuery("");
   };
 

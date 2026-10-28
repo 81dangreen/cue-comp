@@ -79,6 +79,45 @@ export function matchCounts(t: TournamentFull) {
   };
 }
 
+/**
+ * The order auto-pilot calls ready matches to tables: earliest round first, then bracket
+ * (winners before plate, losers and groups), then position. Mirrors `autoAssignTables`.
+ */
+export function callOrder(a: { round: number; bracket: string; position: number }, b: { round: number; bracket: string; position: number }) {
+  return a.round - b.round || (a.bracket < b.bracket ? 1 : a.bracket > b.bracket ? -1 : 0) || a.position - b.position;
+}
+
+/**
+ * What's coming up, for players watching the public page. Groups with their own table get a
+ * running order for that table (what's on now, then each match still to play, in order); every
+ * other ready match joins one queue, those already called to a table first.
+ */
+export function orderOfPlay(t: TournamentFull) {
+  const tableOrder = new Map((t.venue?.tables ?? []).map((tb, i) => [tb.id, i]));
+  const groups = groupsWithStandings(t).filter((g) => g.group.table && !g.complete);
+  const ownTable = new Set(groups.map((g) => g.group.id));
+  const tables = groups
+    .map(({ group, matches }) => ({
+      table: group.table!,
+      group,
+      matches: [
+        ...matches.filter((m) => m.status === "LIVE"),
+        ...matches
+          .filter((m) => m.status === "READY")
+          .sort((a, b) => Number(b.tableId === group.tableId) - Number(a.tableId === group.tableId) || callOrder(a, b)),
+      ],
+    }))
+    .sort((a, b) => (tableOrder.get(a.table.id) ?? 99) - (tableOrder.get(b.table.id) ?? 99));
+  const queue = t.matches
+    .filter((m) => m.status === "READY" && !(m.groupId && ownTable.has(m.groupId)))
+    .sort((a, b) => {
+      const ta = a.tableId ? (tableOrder.get(a.tableId) ?? 98) : 99;
+      const tb = b.tableId ? (tableOrder.get(b.tableId) ?? 98) : 99;
+      return ta - tb || callOrder(a, b);
+    });
+  return { tables, queue };
+}
+
 /** Round name with bracket context, e.g. "Semi Finals" or "Winners · Semi Finals" in double elimination. */
 function contextLabel(bracket: string, round: number, total: number, doubleElim: boolean) {
   const label = roundLabel(bracket, round, total, { doubleElim });
