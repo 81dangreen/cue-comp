@@ -1,6 +1,7 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
+import { dishAllowed, nextBreaker } from "./breaks";
 import type { Dish } from "./constants";
 import { db } from "./db";
 import { publish } from "./events";
@@ -452,6 +453,13 @@ export async function addFrame(
     if (m.status !== "READY" && m.status !== "LIVE") throw new ServiceError("This match can't be scored right now");
     if (!m.entry1Id || !m.entry2Id) throw new ServiceError("Both players must be known");
     const ctx = await frameContext(tx, m);
+    if (dish) {
+      const { breakRule } = await tx.tournament.findUniqueOrThrow({ where: { id: m.tournamentId }, select: { breakRule: true } });
+      const previous = await tx.frame.findMany({ where: { matchId }, orderBy: { number: "asc" }, select: { winner: true } });
+      if (!dishAllowed(dish, slot, nextBreaker(breakRule, m.breakSlot, previous))) {
+        throw new ServiceError(dish === "BREAK" ? "A break & run goes to the player who broke" : "A reverse dish goes to the player who didn't break");
+      }
+    }
 
     // Scoring the first rack of a ready match starts it, which fixes its handicap (and order of play).
     const start = m.status === "READY" ? handicapColumns(await handicapFor(tx, m), m.raceTo) : null;

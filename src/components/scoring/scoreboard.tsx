@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useOptimistic, useState, useTransition } from "react";
+import { nextBreaker } from "@/lib/breaks";
 import type { Dish } from "@/lib/constants";
 import type { ActionResult } from "../forms";
 import { cx } from "../ui";
@@ -20,6 +21,8 @@ type Props = {
   score2: number;
   winnerSlot: 1 | 2 | null;
   breakSlot?: number | null;
+  /** ALTERNATE | WINNER: with the first break, decides who breaks each rack. */
+  breakRule?: string;
   /** Handicap: each side's race target (defaults to raceTo), starting score and rank. */
   target1?: number;
   target2?: number;
@@ -59,6 +62,8 @@ export function Scoreboard(props: Props) {
   const name = (slot: 1 | 2) => (slot === 1 ? props.player1 : props.player2);
   const target = (slot: 1 | 2) => (slot === 1 ? props.target1 : props.target2) ?? props.raceTo;
   const evenRace = target(1) === target(2);
+  // Who breaks this rack; unknown when the match was started without choosing the first breaker.
+  const breaker = nextBreaker(props.breakRule ?? "ALTERNATE", props.breakSlot, props.frames);
 
   function send(slot: 1 | 2, dish: Dish | null) {
     setError(null);
@@ -125,29 +130,34 @@ export function Scoreboard(props: Props) {
           )}
           <span className="text-[8rem] leading-none font-black tabular-nums drop-shadow-lg sm:text-[13rem]">{value}</span>
           <span className="flex h-7 items-center gap-2">
-            {props.breakSlot === slot && !finished && (
-              <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white/80">Broke first</span>
+            {breaker === slot && !finished && (
+              <span className="rounded-full bg-white px-3 py-1 text-xs font-bold tracking-wide text-black uppercase">Breaking</span>
             )}
             {hill && <span className="rounded-full bg-amber-300 px-3 py-1 text-xs font-bold text-black">HILL</span>}
             {won && <span className="rounded-full bg-emerald-300 px-4 py-1 text-sm font-bold text-black">WINNER</span>}
           </span>
         </button>
         {scorable && (
-          <div className="mt-2 grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => scoreRack(slot, "BREAK")}
-              className="rounded-xl border border-white/10 bg-white/5 py-3 text-sm font-medium text-white/75 active:bg-white/15"
-            >
-              + Break &amp; run
-            </button>
-            <button
-              type="button"
-              onClick={() => scoreRack(slot, "REVERSE")}
-              className="rounded-xl border border-white/10 bg-white/5 py-3 text-sm font-medium text-white/75 active:bg-white/15"
-            >
-              + Reverse dish
-            </button>
+          // A break & run belongs to the breaker and a reverse dish to the other player; offer only those.
+          <div className="mt-2 flex gap-2">
+            {(breaker === null || breaker === slot) && (
+              <button
+                type="button"
+                onClick={() => scoreRack(slot, "BREAK")}
+                className="flex-1 rounded-xl border border-white/10 bg-white/5 py-3 text-sm font-medium text-white/75 active:bg-white/15"
+              >
+                + Break &amp; run
+              </button>
+            )}
+            {(breaker === null || breaker !== slot) && (
+              <button
+                type="button"
+                onClick={() => scoreRack(slot, "REVERSE")}
+                className="flex-1 rounded-xl border border-white/10 bg-white/5 py-3 text-sm font-medium text-white/75 active:bg-white/15"
+              >
+                + Reverse dish
+              </button>
+            )}
           </div>
         )}
       </div>

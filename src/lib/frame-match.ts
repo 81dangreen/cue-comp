@@ -44,6 +44,7 @@ export async function frameMatchData(match: Match & { tournament: Tournament; fr
     handicapNote: describeHandicap(handicap, team1, team2),
     winnerSlot: match.winnerId ? (match.winnerId === match.entry1Id ? 1 : 2) : null,
     breakSlot: match.breakSlot,
+    breakRule: match.tournament.breakRule,
     frames: match.frames.map((f) => ({ number: f.number, winner: f.winner, player1Id: f.player1Id, player2Id: f.player2Id })),
   } as const;
 }

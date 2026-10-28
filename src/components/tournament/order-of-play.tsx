@@ -12,23 +12,6 @@ type Props = {
 
 const QUEUE_LIMIT = 12;
 
-/** "Table 3" as a ball in the highlight colour with a 3 on it, beside the name; other names are shown as they are. */
-export function TableBall({ name, className }: { name: string; className?: string }) {
-  const number = name.match(/(\d+)\s*$/)?.[1];
-  if (!number) return null;
-  return (
-    <span
-      className={cx(
-        "grid h-9 w-9 shrink-0 place-items-center rounded-full bg-pop font-display text-lg font-extrabold text-pop-fg shadow-[inset_-3px_-3px_6px_rgb(0_0_0/0.25)] ring-2 ring-white/80",
-        className,
-      )}
-      aria-hidden
-    >
-      {number}
-    </span>
-  );
-}
-
 function Teams({ m, names, stacked }: { m: MatchWithTable; names: Map<string, string>; stacked?: boolean }) {
   if (stacked) {
     // One pair per line on phones, where long pair names would otherwise wrap mid-name.
@@ -64,7 +47,6 @@ export function OrderOfPlay({ order, names, labels, hrefFor }: Props) {
           {tables.map(({ table, group, matches }) => (
             <div key={table.id} className="overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
               <div className="bg-felt flex items-center gap-3 px-4 py-2.5">
-                <TableBall name={table.name} />
                 <span className="font-display text-2xl font-bold tracking-wide uppercase">{table.name}</span>
                 <span className="ml-auto rounded-full bg-white/15 px-3 py-0.5 text-sm font-semibold">{group.name}</span>
               </div>
@@ -135,10 +117,7 @@ export function OrderOfPlay({ order, names, labels, hrefFor }: Props) {
                   <td className="hidden px-2 py-2.5 text-sm text-muted sm:table-cell">{labels.get(m.id)}</td>
                   <td className="px-4 py-2.5 text-right text-sm whitespace-nowrap">
                     {m.table ? (
-                      <span className="inline-flex items-center gap-2 font-semibold">
-                        <TableBall name={m.table.name} className="h-7 w-7 text-base ring-0" />
-                        {m.table.name}
-                      </span>
+                      <span className="font-semibold">{m.table.name}</span>
                     ) : (
                       <span className="text-muted">Awaiting table</span>
                     )}

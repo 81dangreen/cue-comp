@@ -131,6 +131,8 @@ model Tournament {
   groupFinish        String       @default("FIRST_TO") // FIRST_TO | ALL
   koFinish           String       @default("FIRST_TO") // FIRST_TO | ALL (level knockouts play a doubles decider)
   lineupMode         String       @default("RANDOM") // RANDOM | PICK_MATCH | PICK_FRAME
+  // Who breaks after the first rack: ALTERNATE | WINNER (see src/lib/breaks.ts).
+  breakRule          String       @default("ALTERNATE")
   // Group tables: points per result, then tiebreakers in order (see src/lib/standings.ts).
   pointsWin          Int          @default(2)
   pointsDraw         Int          @default(1)

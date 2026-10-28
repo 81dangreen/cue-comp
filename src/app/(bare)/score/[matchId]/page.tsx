@@ -141,6 +141,7 @@ async function Score({ params }: { params: PageProps<"/score/[matchId]">["params
         handicapNote={describeHandicap(handicap, name(match.entry1Id), name(match.entry2Id))}
         winnerSlot={match.winnerId ? (match.winnerId === match.entry1Id ? 1 : 2) : null}
         breakSlot={match.breakSlot}
+        breakRule={match.tournament.breakRule}
         canUndo={match.frames.length > 0}
         frames={match.frames.map((f) => ({ winner: f.winner, breakAndRun: f.breakAndRun, reverseDish: f.reverseDish }))}
         addFrame={addFrameAction.bind(null, match.id)}

@@ -12,7 +12,8 @@ import {
   type Lineup,
 } from "@/lib/match-format";
 import type { FramePick } from "@/actions/matches";
-import { DISHES, type Dish } from "@/lib/constants";
+import { nextBreaker } from "@/lib/breaks";
+import type { Dish } from "@/lib/constants";
 import type { ActionResult } from "../forms";
 import { cx } from "../ui";
 
@@ -40,6 +41,8 @@ export type FrameMatchProps = {
   handicapNote?: string | null;
   winnerSlot: 1 | 2 | null;
   breakSlot?: number | null;
+  /** ALTERNATE | WINNER: with the first break, decides who breaks each frame. */
+  breakRule: string;
   frames: { number: number; winner: number; player1Id: string | null; player2Id: string | null }[];
   /** Ask before saving the frame that decides the match (players score their own matches on tablets). */
   confirmFinish?: boolean;
@@ -54,17 +57,12 @@ const SIDE = {
 
 const screen = "flex min-h-dvh flex-col bg-[radial-gradient(ellipse_at_top,#1d3a6b_0%,#0d1d3b_45%,#060d1c_100%)] p-3 text-white sm:p-6";
 
-/** Who breaks a frame: the first breaker, then alternating. */
-const breakerOf = (breakSlot: number | null | undefined, frameNumber: number) =>
-  breakSlot ? ((frameNumber % 2 === 1 ? breakSlot : 3 - breakSlot) as 1 | 2) : null;
-
 /** Scoring for frame-list matches: a strip of every frame and big "who won this frame" buttons. */
 export function FrameScoreboard(props: FrameMatchProps) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [dish, setDish] = useState<Dish | null>(null);
   const [picked, setPicked] = useState<FramePick>({});
-  const [finishing, setFinishing] = useState<1 | 2 | null>(null);
+  const [finishing, setFinishing] = useState<{ slot: 1 | 2; dish: Dish | null } | null>(null);
 
   const name = new Map([...props.members[1], ...props.members[2]].map((m) => [m.id, m.name]));
   const finished = props.status === "COMPLETED";
@@ -81,6 +79,9 @@ export function FrameScoreboard(props: FrameMatchProps) {
     return singles && id ? name.get(id) : slot === 1 ? props.team1 : props.team2;
   };
   const singlesPlayed = (id: string, slot: 1 | 2) => props.frames.filter((f) => (slot === 1 ? f.player1Id : f.player2Id) === id).length;
+  // Who breaks this frame; unknown when the match was started without choosing the first breaker.
+  const breaker = nextBreaker(props.breakRule, props.breakSlot, props.frames);
+  const teamName = (slot: 1 | 2) => (slot === 1 ? props.team1 : props.team2);
 
   function outcomeIf(slot: 1 | 2) {
     return frameOutcome(props.format, {
@@ -92,25 +93,22 @@ export function FrameScoreboard(props: FrameMatchProps) {
     });
   }
 
-  function send(slot: 1 | 2) {
+  function send(slot: 1 | 2, dish: Dish | null) {
     setError(null);
     startTransition(async () => {
       const res = await props.addFrame(slot, dish, pickEach ? picked : undefined);
       if (res?.error) setError(res.error);
-      else {
-        setDish(null);
-        setPicked({});
-      }
+      else setPicked({});
     });
   }
 
-  function tap(slot: 1 | 2) {
+  function tap(slot: 1 | 2, dish: Dish | null = null) {
     if (!scorable || pending || !ready) return;
     if (props.confirmFinish && outcomeIf(slot).done) {
-      setFinishing(slot);
+      setFinishing({ slot, dish });
       return;
     }
-    send(slot);
+    send(slot, dish);
   }
 
   function undo() {
@@ -128,7 +126,7 @@ export function FrameScoreboard(props: FrameMatchProps) {
       : finished
         ? "Match drawn"
         : null;
-  const preview = finishing ? outcomeIf(finishing) : null;
+  const preview = finishing ? outcomeIf(finishing.slot) : null;
 
   return (
     <div className={screen}>
@@ -186,9 +184,7 @@ export function FrameScoreboard(props: FrameMatchProps) {
                 Frame {next.number}
                 {!next.decider && ` of ${props.format.frames.length}`} · {next.decider ? "Deciding frame · Doubles" : singles ? "Singles" : "Doubles"}
               </p>
-              {breakerOf(props.breakSlot, next.number) && (
-                <p className="mt-1 text-sm text-white/60">{breakerOf(props.breakSlot, next.number) === 1 ? props.team1 : props.team2} to break</p>
-              )}
+              {breaker && <p className="mt-1 text-sm text-white/70">{teamName(breaker)} to break</p>}
             </div>
 
             {pickEach && (
@@ -225,43 +221,53 @@ export function FrameScoreboard(props: FrameMatchProps) {
             <p className="text-center text-white/70">{ready ? "Tap the winner of this frame" : "Choose both players first"}</p>
             <div className="grid flex-1 gap-3 sm:grid-cols-2">
               {([1, 2] as const).map((slot) => (
-                <button
-                  key={slot}
-                  type="button"
-                  disabled={!scorable || !ready || pending}
-                  onClick={() => tap(slot)}
-                  className={cx(
-                    "flex min-h-32 flex-col items-center justify-center gap-2 rounded-3xl border bg-gradient-to-b p-4 shadow-xl transition select-none",
-                    SIDE[slot].button,
-                    "active:scale-[0.985] disabled:opacity-40",
-                  )}
-                >
-                  <span className="flex max-w-full items-center gap-2">
-                    <span className={cx("h-3 w-3 shrink-0 rounded-full", SIDE[slot].dot)} />
-                    <span className="truncate text-2xl font-bold sm:text-4xl">{sideLabel(slot)}</span>
-                  </span>
-                  {singles && nextPlayers[slot === 1 ? "player1Id" : "player2Id"] && (
-                    <span className="text-sm text-white/60">{slot === 1 ? props.team1 : props.team2}</span>
-                  )}
-                  <span className="text-sm font-semibold text-white/80">won the frame</span>
-                </button>
-              ))}
-            </div>
-            {/* Mark the frame before tapping its winner; tap again to clear. */}
-            <div className="mx-auto flex flex-wrap justify-center gap-2" role="group" aria-label="Won in one visit">
-              {(Object.keys(DISHES) as Dish[]).map((d) => (
-                <button
-                  key={d}
-                  type="button"
-                  aria-pressed={dish === d}
-                  onClick={() => setDish(dish === d ? null : d)}
-                  className={cx(
-                    "rounded-full border px-4 py-2 text-sm font-semibold",
-                    dish === d ? "border-white bg-white text-black" : "border-white/20 bg-white/5 text-white/75 active:bg-white/15",
-                  )}
-                >
-                  {DISHES[d]}
-                </button>
+                <div key={slot} className="flex flex-col gap-2">
+                  <button
+                    type="button"
+                    disabled={!scorable || !ready || pending}
+                    onClick={() => tap(slot)}
+                    className={cx(
+                      "flex min-h-32 flex-1 flex-col items-center justify-center gap-2 rounded-3xl border bg-gradient-to-b p-4 shadow-xl transition select-none",
+                      SIDE[slot].button,
+                      "active:scale-[0.985] disabled:opacity-40",
+                    )}
+                  >
+                    {breaker === slot && (
+                      <span className="rounded-full bg-white px-3 py-1 text-xs font-bold tracking-wide text-black uppercase">Breaking</span>
+                    )}
+                    <span className="flex max-w-full items-center gap-2">
+                      <span className={cx("h-3 w-3 shrink-0 rounded-full", SIDE[slot].dot)} />
+                      <span className="truncate text-2xl font-bold sm:text-4xl">{sideLabel(slot)}</span>
+                    </span>
+                    {singles && nextPlayers[slot === 1 ? "player1Id" : "player2Id"] && (
+                      <span className="text-sm text-white/60">{teamName(slot)}</span>
+                    )}
+                    <span className="text-sm font-semibold text-white/80">won the frame</span>
+                  </button>
+                  {/* A break & run belongs to the breaker and a reverse dish to the other side; offer only those. */}
+                  <div className="flex gap-2">
+                    {(breaker === null || breaker === slot) && (
+                      <button
+                        type="button"
+                        disabled={!scorable || !ready || pending}
+                        onClick={() => tap(slot, "BREAK")}
+                        className="flex-1 rounded-xl border border-white/10 bg-white/5 py-3 text-sm font-medium text-white/80 active:bg-white/15 disabled:opacity-40"
+                      >
+                        + Break &amp; run (dish)
+                      </button>
+                    )}
+                    {(breaker === null || breaker !== slot) && (
+                      <button
+                        type="button"
+                        disabled={!scorable || !ready || pending}
+                        onClick={() => tap(slot, "REVERSE")}
+                        className="flex-1 rounded-xl border border-white/10 bg-white/5 py-3 text-sm font-medium text-white/80 active:bg-white/15 disabled:opacity-40"
+                      >
+                        + Reverse dish
+                      </button>
+                    )}
+                  </div>
+                </div>
               ))}
             </div>
           </>
@@ -316,7 +322,7 @@ export function FrameScoreboard(props: FrameMatchProps) {
               {preview.winner ? `${preview.winner === 1 ? props.team1 : props.team2} win` : "Match drawn"}
             </p>
             <p className="mt-2 text-5xl font-black tabular-nums">
-              {props.score1 + (finishing === 1 ? 1 : 0)} – {props.score2 + (finishing === 2 ? 1 : 0)}
+              {props.score1 + (finishing.slot === 1 ? 1 : 0)} – {props.score2 + (finishing.slot === 2 ? 1 : 0)}
             </p>
             <p className="mt-3 text-sm text-white/60">
               {props.team1} v {props.team2}
@@ -332,7 +338,7 @@ export function FrameScoreboard(props: FrameMatchProps) {
               <button
                 type="button"
                 onClick={() => {
-                  send(finishing);
+                  send(finishing.slot, finishing.dish);
                   setFinishing(null);
                 }}
                 className="rounded-xl bg-emerald-400 py-4 text-lg font-bold text-black active:bg-emerald-300"

@@ -24,6 +24,7 @@ import {
   majority,
   MAX_FRAMES,
 } from "@/lib/match-format";
+import { BREAK_RULES } from "@/lib/breaks";
 import { DEFAULT_TIEBREAKERS, TIEBREAKERS } from "@/lib/standings";
 import { ActionForm, SubmitButton, type FormAction } from "../forms";
 import { Button, Field, Input, Select, Textarea } from "../ui";
@@ -52,6 +53,7 @@ export type TournamentDefaults = {
   groupFinish?: string;
   koFinish?: string;
   lineupMode?: string;
+  breakRule?: string;
   pointsWin?: number;
   pointsDraw?: number;
   pointsLoss?: number;
@@ -205,6 +207,16 @@ export function TournamentForm({
       <Field label="Entry fee (optional)">
         <Input name="entryFee" defaultValue={defaults.entryFee ?? ""} placeholder="e.g. £10" />
       </Field>
+      <Field label="Breaks" hint="Who breaks is chosen at the start of each match; after that this decides, and the tablets show it">
+        <Select name="breakRule" defaultValue={defaults.breakRule ?? "ALTERNATE"}>
+          {Object.entries(BREAK_RULES).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      <div className="hidden sm:block" />
       <Field label="Seeding" hint={`Manual: set seeds on the entries page; unseeded ${word} are drawn randomly`}>
         <Select name="seeding" defaultValue={defaults.seeding ?? "RANDOM"}>
           <option value="RANDOM">Random draw</option>

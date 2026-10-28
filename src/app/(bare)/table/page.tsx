@@ -107,6 +107,7 @@ async function TableScreen({ searchParams }: { searchParams: PageProps<"/table">
           score2={current.score2}
           winnerSlot={null}
           breakSlot={current.breakSlot}
+          breakRule={current.tournament.breakRule}
           target1={handicap?.target1}
           target2={handicap?.target2}
           handicap1={handicap?.handicap1}

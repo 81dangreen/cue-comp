@@ -11,6 +11,7 @@ import { describeMatches, sameNamePlayers } from "@/lib/directory";
 import { HANDICAP_STYLES, parseMatrixForm, parseStartTable, type HandicapStyle } from "@/lib/handicap";
 import { FINISH_RULES, isFrameKind, LINEUP_MODES, majority, MAX_FRAMES } from "@/lib/match-format";
 import { DEFAULT_TIEBREAKERS, TIEBREAKERS } from "@/lib/standings";
+import { BREAK_RULES } from "@/lib/breaks";
 import { publish } from "@/lib/events";
 import {
   autoAssignTables,
@@ -66,6 +67,7 @@ function structureSettings(fields: Record<string, string>, entryType: string) {
     groupFinish: pick(fields.groupFinish, FINISH_RULES, "FIRST_TO"),
     koFinish: pick(fields.koFinish, FINISH_RULES, "FIRST_TO"),
     lineupMode: pick(fields.lineupMode, LINEUP_MODES, "RANDOM"),
+    breakRule: pick(fields.breakRule, BREAK_RULES, "ALTERNATE"),
     pointsWin: points("pointsWin", 2),
     pointsDraw: points("pointsDraw", 1),
     pointsLoss: points("pointsLoss", 0),
