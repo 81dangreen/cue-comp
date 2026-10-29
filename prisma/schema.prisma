@@ -245,6 +245,8 @@ model Match {
   status       String     @default("PENDING")
   // A bye match: one side will never be filled, so whoever arrives advances.
   isBye        Boolean    @default(false)
+  // Given by the organiser without being played (no-show). Scores are 0-0, or the full score if chosen.
+  walkover     Boolean    @default(false)
   // Where the winner / loser goes next. Slot is 1 or 2.
   winnerToId   String?
   winnerToSlot Int?

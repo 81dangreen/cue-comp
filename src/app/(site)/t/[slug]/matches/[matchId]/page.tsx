@@ -62,17 +62,20 @@ async function MatchDetail({ params }: { params: PageProps<"/t/[slug]/matches/[m
           </span>
           <TeamHeading name={team(2)} won={decided && match.winnerId === match.entry2Id} lineup={lineup?.[2]} people={people} right />
         </div>
-        {(note || (decided && !match.winnerId)) && (
+        {(note || (decided && !match.winnerId) || match.walkover) && (
           <p className="border-t border-border px-5 py-2.5 text-center text-sm text-muted">
+            {match.walkover && <span className="font-semibold text-foreground">Walkover: not played. </span>}
             {decided && !match.winnerId && <span className="font-semibold text-foreground">Match drawn. </span>}
-            {note && `Handicap: ${note}`}
+            {note && !match.walkover && `Handicap: ${note}`}
           </p>
         )}
       </Card>
 
       <Card>
         <CardHeader title={fmt ? "Frames" : "Racks"} />
-        {scheduled === 0 ? (
+        {match.walkover ? (
+          <EmptyState title="No frames: this match was a walkover" />
+        ) : scheduled === 0 ? (
           <EmptyState title="No frames played yet" />
         ) : (
           <ol className="divide-y divide-border">

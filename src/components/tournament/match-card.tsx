@@ -102,7 +102,7 @@ export function MatchCard({
           {live ? `LIVE${label ? ` · ${label}` : ""}` : label}
         </span>
         <span className="shrink-0">
-          {match.table ? match.table.name : drawn ? "Drawn" : !match.isBye && !decided ? raceText(match) : ""}
+          {match.walkover ? "Walkover" : match.table ? match.table.name : drawn ? "Drawn" : !match.isBye && !decided ? raceText(match) : ""}
         </span>
       </div>
       <Side

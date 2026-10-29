@@ -40,7 +40,12 @@ export function MatchList({
             {labels && <span className="truncate text-xs text-muted">{labels.get(m.id)}</span>}
             <span className={cx("truncate text-right text-[15px]", done && (m.winnerId === m.entry1Id ? "font-semibold" : "text-muted"))}>{n1}</span>
             <span className="min-w-16 rounded-md border border-border bg-surface-2 px-2 py-1 text-center text-[15px] font-bold tabular-nums">
-              {m.status === "PENDING" || m.status === "READY" ? "v" : `${m.score1} – ${m.score2}`}
+              {m.status === "PENDING" || m.status === "READY"
+                ? "v"
+                : m.walkover && m.score1 + m.score2 === 0
+                  ? "W/O"
+                  : `${m.score1} – ${m.score2}`}
+              {m.walkover && m.score1 + m.score2 > 0 && <span className="ml-1 text-xs font-semibold text-muted">W/O</span>}
             </span>
             <span className={cx("truncate text-[15px]", done && (m.winnerId === m.entry2Id ? "font-semibold" : "text-muted"))}>{n2}</span>
           </div>

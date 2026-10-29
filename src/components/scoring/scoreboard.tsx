@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useOptimistic, useState, useTransition } from "react";
 import { nextBreaker } from "@/lib/breaks";
 import type { Dish } from "@/lib/constants";
+import { LOCKED_MESSAGE, useConnection } from "../connection";
 import type { ActionResult } from "../forms";
 import { cx } from "../ui";
 
@@ -41,7 +43,7 @@ type Props = {
 };
 
 const dishButton =
-  "flex-1 truncate rounded-lg border border-white/10 bg-white/5 px-2 py-2 text-xs font-medium text-white/75 active:bg-white/15 sm:rounded-xl sm:py-3 sm:text-sm";
+  "flex-1 truncate rounded-lg border border-white/10 bg-white/5 px-2 py-2 text-xs font-medium text-white/75 active:bg-white/15 disabled:opacity-40 sm:rounded-xl sm:py-3 sm:text-sm";
 
 const SIDE = {
   1: { chip: "bg-sky-400/25 text-sky-100", ring: "ring-sky-300/60" },
@@ -50,6 +52,11 @@ const SIDE = {
 
 export function Scoreboard(props: Props) {
   const [pending, startTransition] = useTransition();
+  const router = useRouter();
+  // Scoring waits while the connection is down or the real score is reloading after it.
+  const connection = useConnection();
+  const locked = connection !== "online";
+  const busy = pending || locked;
   const [error, setError] = useState<string | null>(null);
   const [finishing, setFinishing] = useState<{ slot: 1 | 2; dish: Dish | null } | null>(null);
   const [score, addOptimistic] = useOptimistic(
@@ -73,12 +80,15 @@ export function Scoreboard(props: Props) {
     startTransition(async () => {
       addOptimistic({ slot, by: 1 });
       const res = await props.addFrame(slot, dish);
-      if (res?.error) setError(res.error);
+      if (res?.error) {
+        setError(res.error);
+        router.refresh();
+      }
     });
   }
 
   function scoreRack(slot: 1 | 2, dish: Dish | null = null) {
-    if (!scorable || pending) return;
+    if (!scorable || busy) return;
     const next = (slot === 1 ? score.s1 : score.s2) + 1;
     if (props.confirmFinish && next >= target(slot)) {
       setFinishing({ slot, dish });
@@ -89,12 +99,15 @@ export function Scoreboard(props: Props) {
 
   function undo() {
     const last = props.frames.at(-1);
-    if (!last || pending) return;
+    if (!last || busy) return;
     setError(null);
     startTransition(async () => {
       addOptimistic({ slot: last.winner as 1 | 2, by: -1 });
       const res = await props.undo();
-      if (res?.error) setError(res.error);
+      if (res?.error) {
+        setError(res.error);
+        router.refresh();
+      }
     });
   }
 
@@ -110,7 +123,7 @@ export function Scoreboard(props: Props) {
         <button
           type="button"
           onClick={() => scoreRack(slot)}
-          disabled={!scorable}
+          disabled={!scorable || locked}
           className={cx(
             "flex min-h-0 flex-1 flex-col items-center justify-center gap-1 rounded-2xl border border-white/10 p-2 shadow-xl transition select-none sm:gap-3 sm:rounded-3xl sm:p-4",
             "bg-gradient-to-b from-white/[0.09] to-white/[0.03]",
@@ -149,12 +162,12 @@ export function Scoreboard(props: Props) {
           // A break & run belongs to the breaker and a reverse dish to the other player; offer only those.
           <div className="flex flex-col gap-2 sm:flex-row">
             {(breaker === null || breaker === slot) && (
-              <button type="button" onClick={() => scoreRack(slot, "BREAK")} className={dishButton}>
+              <button type="button" onClick={() => scoreRack(slot, "BREAK")} disabled={locked} className={dishButton}>
                 + Break &amp; run
               </button>
             )}
             {(breaker === null || breaker !== slot) && (
-              <button type="button" onClick={() => scoreRack(slot, "REVERSE")} className={dishButton}>
+              <button type="button" onClick={() => scoreRack(slot, "REVERSE")} disabled={locked} className={dishButton}>
                 + Reverse dish
               </button>
             )}
@@ -224,12 +237,13 @@ export function Scoreboard(props: Props) {
           ))}
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          {locked && <span className="text-xs font-semibold text-amber-200 sm:text-sm">{LOCKED_MESSAGE[connection as "offline"]}</span>}
           {error && <span className="max-w-40 text-xs font-medium text-red-300 sm:text-sm">{error}</span>}
           {props.status === "READY" && <span className="hidden text-sm text-white/70 sm:inline">Tap a player to score the first rack</span>}
           <button
             type="button"
             onClick={undo}
-            disabled={!props.canUndo || pending || (props.confirmFinish && finished)}
+            disabled={!props.canUndo || busy || (props.confirmFinish && finished)}
             className="rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-xs font-semibold whitespace-nowrap active:bg-white/20 disabled:opacity-30 sm:px-5 sm:py-3 sm:text-sm"
           >
             Undo

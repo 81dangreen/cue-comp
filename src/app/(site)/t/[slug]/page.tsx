@@ -5,7 +5,7 @@ import { Suspense } from "react";
 import { registerForTournament } from "@/actions/tournaments";
 import { entryNames, getTournamentFull } from "@/lib/queries";
 import { ordinal } from "@/lib/results";
-import { matchCounts, matchLabels, orderOfPlay, placings, raceText } from "@/lib/views";
+import { matchLabels, orderOfPlay, placings, raceText } from "@/lib/views";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { MatchCard } from "@/components/tournament/match-card";
 import { OrderOfPlay } from "@/components/tournament/order-of-play";
@@ -39,7 +39,6 @@ async function Overview({ params }: { params: PageProps<"/t/[slug]">["params"] }
     .filter((m) => m.status === "COMPLETED" && !m.isBye)
     .sort((a, b) => +(b.completedAt ?? 0) - +(a.completedAt ?? 0))
     .slice(0, 6);
-  const counts = matchCounts(t);
   const ranks = t.status === "COMPLETED" ? placings(t) : new Map<string, number>();
   const podium = [...ranks.entries()].filter(([, r]) => r <= 4).sort((a, b) => a[1] - b[1]);
   const card = (m: (typeof t.matches)[number]) => (
@@ -47,7 +46,7 @@ async function Overview({ params }: { params: PageProps<"/t/[slug]">["params"] }
   );
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
+    <div className={t.registrationOpen ? "grid gap-6 lg:grid-cols-[1fr_20rem]" : "space-y-6"}>
       <div className="space-y-6">
         {podium.length > 0 && (
           <Card>
@@ -102,21 +101,9 @@ async function Overview({ params }: { params: PageProps<"/t/[slug]">["params"] }
         )}
       </div>
 
-      <aside className="space-y-6">
-        {t.matches.length > 0 && (
-          <Card className="p-5">
-            <div className="text-sm text-muted">Progress</div>
-            <div className="mt-1 text-2xl font-bold tabular-nums">
-              {counts.completed}/{counts.total}
-              <span className="ml-1 text-sm font-normal text-muted">matches</span>
-            </div>
-            <div className="mt-3 h-2 overflow-hidden rounded-full bg-surface-2">
-              <div className="h-full bg-accent" style={{ width: `${counts.total ? (counts.completed / counts.total) * 100 : 0}%` }} />
-            </div>
-          </Card>
-        )}
-
-        {t.registrationOpen && (
+      {/* Progress and venue live in the header; a sidebar appears only for signing up. */}
+      {t.registrationOpen && (
+        <aside className="space-y-6">
           <Card>
             <CardHeader title="Register" subtitle={t.entryFee ? `Entry fee: ${t.entryFee}` : undefined} />
             <ActionForm action={registerForTournament.bind(null, t.slug)} className="space-y-3 p-5" resetOnSuccess>
@@ -139,16 +126,8 @@ async function Overview({ params }: { params: PageProps<"/t/[slug]">["params"] }
               </SubmitButton>
             </ActionForm>
           </Card>
-        )}
-
-        {t.venue && (
-          <Card className="p-5">
-            <div className="text-sm text-muted">Venue</div>
-            <div className="mt-1 font-medium">{t.venue.name}</div>
-            {t.venue.address && <div className="text-sm text-muted">{t.venue.address}</div>}
-          </Card>
-        )}
-      </aside>
+        </aside>
+      )}
     </div>
   );
 }

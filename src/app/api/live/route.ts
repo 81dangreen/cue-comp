@@ -27,8 +27,9 @@ export async function GET(request: Request) {
           (tableId && event.tableIds.includes(tableId));
         if (relevant) send(`event: change\ndata: ${JSON.stringify(event)}\n\n`);
       });
-      // Keep proxies from closing an idle connection.
-      const heartbeat = setInterval(() => send(": ping\n\n"), 25_000);
+      // Keeps proxies from closing an idle connection, and lets clients notice a dead one
+      // (a named event, since comment lines never reach the page).
+      const heartbeat = setInterval(() => send("event: ping\ndata: \n\n"), 25_000);
       cleanup = () => {
         clearInterval(heartbeat);
         unsubscribe();

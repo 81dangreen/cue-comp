@@ -130,9 +130,7 @@ async function TableScreen({ searchParams }: { searchParams: PageProps<"/table">
       <p className="text-xs font-semibold tracking-wide text-white/50 uppercase">Last result on this table</p>
       <p className="mt-2 text-xl">
         <span className={!last.winnerId || last.winnerId === last.entry1Id ? "font-bold" : "text-white/60"}>{name(last.entry1Id)}</span>
-        <span className="mx-3 font-black tabular-nums">
-          {last.score1} – {last.score2}
-        </span>
+        <span className="mx-3 font-black tabular-nums">{last.walkover ? "W/O" : `${last.score1} – ${last.score2}`}</span>
         <span className={!last.winnerId || last.winnerId === last.entry2Id ? "font-bold" : "text-white/60"}>{name(last.entry2Id)}</span>
       </p>
     </div>

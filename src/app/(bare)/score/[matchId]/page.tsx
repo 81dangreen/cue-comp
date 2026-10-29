@@ -2,15 +2,23 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { addFrameAction, assignTableAction, setResultAction, startMatchAction, undoFrameAction } from "@/actions/matches";
+import {
+  addFrameAction,
+  assignTableAction,
+  setResultAction,
+  startMatchAction,
+  undoFrameAction,
+  undoWalkoverAction,
+} from "@/actions/matches";
 import { requireUser } from "@/lib/auth";
 import { roundLabel } from "@/lib/bracket";
 import { frameMatchData } from "@/lib/frame-match";
 import { describeHandicap } from "@/lib/handicap";
-import { matchHandicap } from "@/lib/tournament-service";
+import { fullScore, matchHandicap } from "@/lib/tournament-service";
 import { db } from "@/lib/db";
 import { entryName } from "@/lib/queries";
-import { ActionForm, SubmitButton } from "@/components/forms";
+import { ActionButton, ActionForm, SubmitButton } from "@/components/forms";
+import { WalkoverControl } from "@/components/tournament/walkover-control";
 import { LiveRefresher } from "@/components/live-refresher";
 import { FrameMatchStart, FrameScoreboard } from "@/components/scoring/frame-scoreboard";
 import { Scoreboard } from "@/components/scoring/scoreboard";
@@ -159,6 +167,22 @@ async function Score({ params }: { params: PageProps<"/score/[matchId]">["params
               {match.status === "COMPLETED" ? "Correct result" : "Save result"}
             </SubmitButton>
           </ActionForm>
+          {match.walkover ? (
+            <div className="flex items-center gap-3">
+              <span className="font-semibold text-amber-200">Walkover</span>
+              <ActionButton action={undoWalkoverAction.bind(null, match.id)} variant="secondary" className="bg-transparent px-2.5 py-1 text-xs text-white">
+                Undo walkover
+              </ActionButton>
+            </div>
+          ) : (
+            <WalkoverControl
+              matchId={match.id}
+              side1={name(match.entry1Id)}
+              side2={name(match.entry2Id)}
+              fullScore={`${fullScore(match, match.tournament)}–0`}
+              dark
+            />
+          )}
           {tables.length > 0 && match.status !== "COMPLETED" && (
             <div className="flex items-center gap-2">
               <span>Table:</span>

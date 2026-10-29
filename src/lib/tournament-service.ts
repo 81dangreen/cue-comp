@@ -1,6 +1,6 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { dishAllowed, nextBreaker } from "./breaks";
 import type { Dish } from "./constants";
 import { db } from "./db";
@@ -563,6 +563,72 @@ function frameResult(fmt: FrameFormat, s: { score1: number; score2: number; hand
   return outcome.winner;
 }
 
+export const WALKOVER_SCORING = {
+  NO_FRAMES: "Win, no frames",
+  FULL: "Win by the full score",
+} as const;
+export type WalkoverScoring = keyof typeof WALKOVER_SCORING;
+
+/** The score a walkover gives the winner when it counts as won in full: every frame when all are played, else the race. */
+export function fullScore(m: { raceTo: number; bracket: string }, t: { matchFrames: string[]; groupFinish: string; koFinish: string }) {
+  const fmt = frameFormat(t, m.bracket);
+  return fmt?.finish === "ALL" ? fmt.frames.length : m.raceTo;
+}
+
+/**
+ * Organiser gives a match to one side without it being played (a no-show). It counts as a win;
+ * frames are either not counted (0-0) or the winner's full score. Replaces any result or frames so far.
+ */
+export async function setWalkover(matchId: string, winner: 1 | 2, scoring: WalkoverScoring) {
+  if (!(scoring in WALKOVER_SCORING)) throw new ServiceError("Choose how the walkover counts");
+  const match = await db.$transaction(async (tx) => {
+    const m = await tx.match.findUniqueOrThrow({ where: { id: matchId }, include: { tournament: true } });
+    if (!m.entry1Id || !m.entry2Id || m.isBye) throw new ServiceError("Both sides must be known");
+    const matches = await loadEngine(tx, m.tournamentId);
+    if (m.status === "COMPLETED") {
+      const changed = wrapEngine(() => reopenMatch(matches, matchId));
+      await persist(tx, matches, changed);
+    }
+    const points = scoring === "FULL" ? fullScore(m, m.tournament) : 0;
+    const score1 = winner === 1 ? points : 0;
+    const score2 = winner === 2 ? points : 0;
+    await tx.frame.deleteMany({ where: { matchId } });
+    await tx.match.update({
+      where: { id: matchId },
+      data: { score1, score2, handicap1: 0, handicap2: 0, target1: null, target2: null, walkover: true, lineup: Prisma.DbNull, status: "LIVE" },
+    });
+    const fresh = matches.get(matchId)!;
+    Object.assign(fresh, { score1, score2, status: "LIVE" });
+    const changed = wrapEngine(() => completeMatch(matches, matchId, winner));
+    await persist(tx, matches, changed);
+    await refreshTournamentStatus(tx, m.tournamentId);
+    return m;
+  });
+  publish(match.tournamentId, [match.tableId]);
+  await autoPilot(match.tournamentId);
+}
+
+/** Take a walkover back: the match is ready to play again (only while nothing after it has started). */
+export async function undoWalkover(matchId: string) {
+  const match = await db.$transaction(async (tx) => {
+    const m = await tx.match.findUniqueOrThrow({ where: { id: matchId } });
+    if (!m.walkover) throw new ServiceError("This match wasn't a walkover");
+    const matches = await loadEngine(tx, m.tournamentId);
+    if (m.status === "COMPLETED") {
+      const changed = wrapEngine(() => reopenMatch(matches, matchId));
+      await persist(tx, matches, changed);
+    }
+    await tx.match.update({
+      where: { id: matchId },
+      data: { score1: 0, score2: 0, walkover: false, winnerId: null, status: "READY", startedAt: null, completedAt: null, breakSlot: null },
+    });
+    await refreshTournamentStatus(tx, m.tournamentId);
+    return m;
+  });
+  publish(match.tournamentId, [match.tableId]);
+  await autoPilot(match.tournamentId);
+}
+
 /** Organiser enters a final score directly (no frame-by-frame history). */
 export async function setResult(matchId: string, score1: number, score2: number) {
   const match = await db.$transaction(async (tx) => {
@@ -595,7 +661,8 @@ export async function setResult(matchId: string, score1: number, score2: number)
     await tx.frame.deleteMany({ where: { matchId } });
     await tx.match.update({
       where: { id: matchId },
-      data: { ...(start ?? {}), score1, score2, status: "LIVE", startedAt: m.startedAt ?? new Date() },
+      // An entered result replaces any walkover.
+      data: { ...(start ?? {}), score1, score2, walkover: false, status: "LIVE", startedAt: m.startedAt ?? new Date() },
     });
     const fresh = matches.get(matchId)!;
     fresh.score1 = score1;

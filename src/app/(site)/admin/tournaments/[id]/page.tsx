@@ -12,6 +12,7 @@ import {
   setShootoutAction,
 } from "@/actions/tournaments";
 import { assignTableAction } from "@/actions/matches";
+import { fullScore } from "@/lib/tournament-service";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { ordinal } from "@/lib/results";
@@ -20,6 +21,7 @@ import { groupsWithStandings, matchCounts, matchLabels } from "@/lib/views";
 import { ActionButton, ActionForm, SubmitButton } from "@/components/forms";
 import { MatchList } from "@/components/tournament/match-list";
 import { TableSelect } from "@/components/tournament/table-select";
+import { WalkoverControl } from "@/components/tournament/walkover-control";
 import { ButtonLink, Card, CardHeader, EmptyState, PageSkeleton, Select } from "@/components/ui";
 
 export default function ControlRoomPage({ params }: PageProps<"/admin/tournaments/[id]">) {
@@ -73,6 +75,12 @@ async function ControlRoom({ params }: { params: PageProps<"/admin/tournaments/[
       <ButtonLink href={scoreLink(m)} variant={m.status === "LIVE" ? "primary" : "secondary"} className="px-2.5 py-1 text-xs">
         {m.status === "LIVE" ? "Score" : "Start"}
       </ButtonLink>
+      <WalkoverControl
+        matchId={m.id}
+        side1={names.get(m.entry1Id!) ?? "Side 1"}
+        side2={names.get(m.entry2Id!) ?? "Side 2"}
+        fullScore={`${fullScore(m, t)}–0`}
+      />
     </>
   );
 

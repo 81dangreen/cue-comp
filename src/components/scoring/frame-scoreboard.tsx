@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import {
   frameAt,
@@ -14,6 +15,7 @@ import {
 import type { FramePick } from "@/actions/matches";
 import { nextBreaker } from "@/lib/breaks";
 import type { Dish } from "@/lib/constants";
+import { LOCKED_MESSAGE, useConnection } from "../connection";
 import type { ActionResult } from "../forms";
 import { cx } from "../ui";
 
@@ -63,6 +65,11 @@ const dishButton =
 /** Scoring for frame-list matches: a strip of every frame and big "who won this frame" buttons. */
 export function FrameScoreboard(props: FrameMatchProps) {
   const [pending, startTransition] = useTransition();
+  const router = useRouter();
+  // Scoring waits while the connection is down or the real score is reloading after it.
+  const connection = useConnection();
+  const locked = connection !== "online";
+  const busy = pending || locked;
   const [error, setError] = useState<string | null>(null);
   const [picked, setPicked] = useState<FramePick>({});
   const [finishing, setFinishing] = useState<{ slot: 1 | 2; dish: Dish | null } | null>(null);
@@ -100,13 +107,16 @@ export function FrameScoreboard(props: FrameMatchProps) {
     setError(null);
     startTransition(async () => {
       const res = await props.addFrame(slot, dish, pickEach ? picked : undefined);
-      if (res?.error) setError(res.error);
+      if (res?.error) {
+        setError(res.error);
+        router.refresh();
+      }
       else setPicked({});
     });
   }
 
   function tap(slot: 1 | 2, dish: Dish | null = null) {
-    if (!scorable || pending || !ready) return;
+    if (!scorable || busy || !ready) return;
     if (props.confirmFinish && outcomeIf(slot).done) {
       setFinishing({ slot, dish });
       return;
@@ -115,11 +125,14 @@ export function FrameScoreboard(props: FrameMatchProps) {
   }
 
   function undo() {
-    if (!played || pending) return;
+    if (!played || busy) return;
     setError(null);
     startTransition(async () => {
       const res = await props.undo();
-      if (res?.error) setError(res.error);
+      if (res?.error) {
+        setError(res.error);
+        router.refresh();
+      }
     });
   }
 
@@ -135,12 +148,12 @@ export function FrameScoreboard(props: FrameMatchProps) {
     // A break & run belongs to the breaker and a reverse dish to the other side; offer only those.
     <div className="flex gap-2">
       {(breaker === null || breaker === slot) && (
-        <button type="button" disabled={!scorable || !ready || pending} onClick={() => tap(slot, "BREAK")} className={dishButton}>
+        <button type="button" disabled={!scorable || !ready || busy} onClick={() => tap(slot, "BREAK")} className={dishButton}>
           + Break &amp; run
         </button>
       )}
       {(breaker === null || breaker !== slot) && (
-        <button type="button" disabled={!scorable || !ready || pending} onClick={() => tap(slot, "REVERSE")} className={dishButton}>
+        <button type="button" disabled={!scorable || !ready || busy} onClick={() => tap(slot, "REVERSE")} className={dishButton}>
           + Reverse dish
         </button>
       )}
@@ -244,7 +257,7 @@ export function FrameScoreboard(props: FrameMatchProps) {
                 <div key={slot} className="flex min-h-0 min-w-0 flex-col gap-2">
                   <button
                     type="button"
-                    disabled={!scorable || !ready || pending}
+                    disabled={!scorable || !ready || busy}
                     onClick={() => tap(slot)}
                     className={cx(
                       "flex min-h-24 flex-1 flex-col items-center justify-center gap-1 rounded-2xl border bg-gradient-to-b p-2 shadow-xl transition select-none sm:gap-2 sm:rounded-3xl",
@@ -303,11 +316,12 @@ export function FrameScoreboard(props: FrameMatchProps) {
             );
           })}
         </ol>
+        {locked && <span className="text-xs font-semibold text-amber-200 sm:text-sm">{LOCKED_MESSAGE[connection as "offline"]}</span>}
         {error && <span className="max-w-40 text-xs font-medium text-red-300">{error}</span>}
         <button
           type="button"
           onClick={undo}
-          disabled={!played || pending || (props.confirmFinish && finished)}
+          disabled={!played || busy || (props.confirmFinish && finished)}
           className="shrink-0 rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-xs font-semibold whitespace-nowrap active:bg-white/20 disabled:opacity-30 sm:px-5 sm:py-3 sm:text-sm"
         >
           Undo
@@ -413,6 +427,7 @@ export function FrameMatchStart({
   start: (breakSlot: 1 | 2, lineup: Lineup | null) => Promise<ActionResult>;
 }) {
   const [pending, startTransition] = useTransition();
+  const locked = useConnection() !== "online";
   const [error, setError] = useState<string | null>(null);
   const [playerA, setPlayerA] = useState<{ 1?: string; 2?: string }>({});
   const choose = lineupMode === "PICK_MATCH";
@@ -468,7 +483,7 @@ export function FrameMatchStart({
             <button
               key={slot}
               type="button"
-              disabled={pending || !ready}
+              disabled={pending || locked || !ready}
               onClick={() => go(slot)}
               className="rounded-2xl border border-white/15 bg-white/10 px-4 py-[min(1.5rem,3vh)] text-xl sm:text-2xl font-bold shadow-lg active:scale-[0.98] active:bg-white/20 disabled:opacity-40"
             >

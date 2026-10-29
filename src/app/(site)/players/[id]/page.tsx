@@ -106,9 +106,7 @@ async function Player({ params }: { params: PageProps<"/players/[id]">["params"]
                 <span className={`w-6 font-bold ${isWin ? "text-accent" : isDraw ? "text-muted" : "text-live"}`}>
                   {isWin ? "W" : isDraw ? "D" : "L"}
                 </span>
-                <span className="w-14 font-semibold tabular-nums">
-                  {myScore}–{theirScore}
-                </span>
+                <span className="w-14 font-semibold tabular-nums">{m.walkover ? "W/O" : `${myScore}–${theirScore}`}</span>
                 <span className="flex-1">v {opponent}</span>
                 <Link href={`/t/${m.tournament.slug}`} className="text-muted hover:text-accent">
                   {m.tournament.name}
