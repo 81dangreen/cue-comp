@@ -28,6 +28,12 @@ export function ButtonLink({
   return <Link className={cx(buttonBase, buttonStyles[variant], className)} {...props} />;
 }
 
+/**
+ * A flat, square-cornered section that runs edge to edge on phones (cancelling the page's side
+ * padding) and sits within the content column from tablet width up.
+ */
+export const panel = "-mx-4 overflow-hidden border-y border-border bg-surface sm:mx-0 sm:border-x";
+
 export function Card({ className, ...props }: ComponentProps<"div">) {
   return <div className={cx("rounded-xl border border-border bg-surface shadow-sm", className)} {...props} />;
 }

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { MatchWithTable } from "@/lib/queries";
 import type { orderOfPlay } from "@/lib/views";
-import { cx } from "../ui";
+import { cx, panel } from "../ui";
 
 type Props = {
   order: ReturnType<typeof orderOfPlay>;
@@ -18,23 +18,69 @@ const QUEUE_LIMIT = 12;
  */
 function Fixture({ m, names }: { m: MatchWithTable; names: Map<string, string> }) {
   const live = m.status === "LIVE";
+  const done = m.status === "COMPLETED";
+  // Finished: the winner in bold, the loser muted; otherwise both medium weight.
+  const side = (id: string | null) =>
+    done && m.winnerId ? (m.winnerId === id ? "font-bold" : "font-normal text-muted") : "font-medium";
+  const score = m.walkover && m.score1 + m.score2 === 0 ? "W/O" : `${m.score1} – ${m.score2}`;
   return (
     <span className="grid min-w-0 grid-cols-[minmax(0,1fr)_3.75rem_minmax(0,1fr)] items-center gap-2 sm:grid-cols-[minmax(0,1fr)_4.5rem_minmax(0,1fr)] sm:gap-3">
-      <span className="text-right text-sm leading-snug font-medium break-words sm:text-base">
+      <span className={cx("text-right text-sm leading-snug break-words sm:text-base", side(m.entry1Id))}>
         <SideName name={names.get(m.entry1Id!)} />
       </span>
       <span
         className={cx(
           "justify-self-center rounded-md px-2 py-0.5 text-center tabular-nums",
-          live ? "bg-surface-2 font-display text-xl font-bold text-foreground ring-1 ring-border" : "text-sm text-muted",
+          live && "bg-surface-2 font-display text-xl font-bold text-foreground ring-1 ring-border",
+          done && "bg-accent font-display text-lg font-bold text-accent-fg",
+          !live && !done && "text-sm text-muted",
         )}
       >
-        {live ? `${m.score1} – ${m.score2}` : "v"}
+        {live || done ? score : "v"}
       </span>
-      <span className="text-sm leading-snug font-medium break-words sm:text-base">
+      <span className={cx("text-sm leading-snug break-words sm:text-base", side(m.entry2Id))}>
         <SideName name={names.get(m.entry2Id!)} />
       </span>
     </span>
+  );
+}
+
+/**
+ * Matches as a flat list of fixtures (live now, latest results): round on the left, the fixture
+ * in the middle, the table on the right; on phones the round and table go under the fixture.
+ */
+export function MatchRows({
+  matches,
+  names,
+  labels,
+  hrefFor,
+}: {
+  matches: MatchWithTable[];
+  names: Map<string, string>;
+  labels: Map<string, string>;
+  hrefFor: (m: MatchWithTable) => string;
+}) {
+  return (
+    <ol className={cx(panel, "divide-y divide-border")}>
+      {matches.map((m) => (
+        <li key={m.id}>
+          <Link
+            href={hrefFor(m)}
+            className={cx(
+              "grid items-center gap-x-3 gap-y-1 px-4 py-3 hover:bg-surface-2 sm:grid-cols-[13rem_minmax(0,1fr)_7rem]",
+              m.status === "LIVE" && "bg-live/5",
+            )}
+          >
+            <span className="order-2 text-center text-xs text-muted sm:order-none sm:text-left sm:text-sm">
+              {m.status === "LIVE" && <span className="mr-1.5 rounded bg-live px-1.5 py-0.5 text-[11px] font-bold text-live-fg">LIVE</span>}
+              {labels.get(m.id)}
+            </span>
+            <Fixture m={m} names={names} />
+            <span className="order-3 text-center text-xs text-muted sm:order-none sm:text-right sm:text-sm">{m.table?.name}</span>
+          </Link>
+        </li>
+      ))}
+    </ol>
   );
 }
 
@@ -60,7 +106,7 @@ export function OrderOfPlay({ order, names, labels, hrefFor }: Props) {
       {tables.length > 0 && (
         <div className="space-y-4">
           {tables.map(({ table, group, matches }) => (
-            <div key={table.id} className="overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
+            <div key={table.id} className={panel}>
               <div className="bg-felt flex items-center gap-3 px-4 py-2.5">
                 <span className="font-display text-2xl font-bold tracking-wide uppercase">{table.name}</span>
                 <span className="ml-auto rounded-full bg-white/15 px-3 py-0.5 text-sm font-semibold">{group.name}</span>
@@ -103,7 +149,7 @@ export function OrderOfPlay({ order, names, labels, hrefFor }: Props) {
       )}
 
       {queue.length > 0 && (
-        <div className="overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
+        <div className={panel}>
           {tables.length > 0 && <div className="bg-felt px-4 py-2.5 font-display text-xl font-bold tracking-wide uppercase">Other matches</div>}
           <table className="w-full text-[15px]">
             <thead className="bg-surface-2 text-xs text-muted">

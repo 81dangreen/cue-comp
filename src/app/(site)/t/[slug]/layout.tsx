@@ -41,9 +41,10 @@ async function Header({ params }: { params: LayoutProps<"/t/[slug]">["params"] }
   const live = t.matches.filter((m) => m.status === "LIVE").length;
 
   return (
-    <div>
-      <div className="bg-felt overflow-hidden rounded-2xl shadow-lg ring-1 ring-black/10">
-        <div className="flex flex-wrap items-start justify-between gap-3 p-4 sm:gap-4 sm:p-7">
+    // Header and tabs are full-width bands; their content lines up with the page's content column.
+    <div className="-mt-8">
+      <div className="bg-felt full-bleed">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-start justify-between gap-3 px-4 py-5 sm:gap-4 sm:py-8">
           <div className="min-w-0">
             <p className="text-sm font-semibold tracking-[0.18em] text-pop uppercase">{t.organization.name}</p>
             <h1 className="mt-1 font-display text-4xl leading-none font-bold tracking-tight sm:text-6xl">{t.name}</h1>
@@ -71,14 +72,16 @@ async function Header({ params }: { params: LayoutProps<"/t/[slug]">["params"] }
             {t.status === "IN_PROGRESS" && <LiveRefresher tournamentId={t.id} onDark />}
           </div>
         </div>
-        <dl className="grid grid-cols-2 border-t border-white/10 bg-black/20 sm:grid-cols-3 lg:grid-flow-col lg:auto-cols-fr lg:grid-cols-none">
-          {facts.map(([label, value]) => (
-            <div key={label} className="px-4 py-2 sm:px-7 sm:py-3">
-              <dt className="text-[10px] font-semibold tracking-[0.14em] text-white/60 uppercase sm:text-[11px]">{label}</dt>
-              <dd className="mt-0.5 text-sm leading-snug font-semibold text-white sm:text-base">{value}</dd>
-            </div>
-          ))}
-        </dl>
+        <div className="border-t border-white/10 bg-black/20">
+          <dl className="mx-auto grid max-w-7xl grid-cols-2 px-4 sm:grid-cols-3 lg:grid-flow-col lg:auto-cols-fr lg:grid-cols-none">
+            {facts.map(([label, value]) => (
+              <div key={label} className="py-2 pr-4 sm:py-3">
+                <dt className="text-[10px] font-semibold tracking-[0.14em] text-white/60 uppercase sm:text-[11px]">{label}</dt>
+                <dd className="mt-0.5 text-sm leading-snug font-semibold text-white sm:text-base">{value}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
         {/* How far through the event we are, as a bar along the bottom edge. */}
         {hasDraw && (
           <div className="h-1.5 bg-black/30" role="progressbar" aria-label="Matches played" aria-valuenow={counts.completed} aria-valuemax={counts.total}>
@@ -86,15 +89,17 @@ async function Header({ params }: { params: LayoutProps<"/t/[slug]">["params"] }
           </div>
         )}
       </div>
-      <div className="mt-4">
-        <TabNav
+      <div className="full-bleed border-b border-border bg-surface">
+        <div className="mx-auto max-w-7xl px-4 [&_nav]:border-b-0">
+          <TabNav
           tabs={[
             { href: base, label: "Overview" },
             ...(hasDraw ? [{ href: `${base}/bracket`, label: t.groups.length ? "Groups & bracket" : "Bracket" }] : []),
             ...(hasDraw ? [{ href: `${base}/matches`, label: "Matches" }] : []),
             { href: `${base}/players`, label: pairs ? "Pairs" : "Players" },
           ]}
-        />
+          />
+        </div>
       </div>
     </div>
   );

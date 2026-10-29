@@ -1,5 +1,5 @@
 import type { StandingRow } from "@/lib/standings";
-import { cx } from "../ui";
+import { cx, panel } from "../ui";
 
 export function GroupTable({
   name,
@@ -27,7 +27,7 @@ export function GroupTable({
 }) {
   const draws = showDraws || rows.some((r) => r.drawn > 0);
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
+    <div className={panel}>
       <div className="bg-felt flex items-center justify-between gap-2 px-4 py-2.5">
         <span className="font-display text-xl font-bold tracking-wide uppercase">{name}</span>
         {tableName && <span className="rounded-full bg-white/15 px-3 py-0.5 text-sm font-semibold">{tableName}</span>}

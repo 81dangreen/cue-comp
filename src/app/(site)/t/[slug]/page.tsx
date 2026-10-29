@@ -5,11 +5,10 @@ import { Suspense } from "react";
 import { registerForTournament } from "@/actions/tournaments";
 import { entryNames, getTournamentFull } from "@/lib/queries";
 import { ordinal } from "@/lib/results";
-import { matchLabels, orderOfPlay, placings, raceText } from "@/lib/views";
+import { matchLabels, orderOfPlay, placings } from "@/lib/views";
 import { ActionForm, SubmitButton } from "@/components/forms";
-import { MatchCard } from "@/components/tournament/match-card";
-import { OrderOfPlay } from "@/components/tournament/order-of-play";
-import { Card, CardHeader, EmptyState, Field, Input, PageSkeleton, SectionTitle } from "@/components/ui";
+import { MatchRows, OrderOfPlay } from "@/components/tournament/order-of-play";
+import { Card, CardHeader, cx, EmptyState, Field, Input, PageSkeleton, panel, SectionTitle } from "@/components/ui";
 
 export async function generateMetadata({ params }: PageProps<"/t/[slug]">): Promise<Metadata> {
   const { slug } = await params;
@@ -41,31 +40,28 @@ async function Overview({ params }: { params: PageProps<"/t/[slug]">["params"] }
     .slice(0, 6);
   const ranks = t.status === "COMPLETED" ? placings(t) : new Map<string, number>();
   const podium = [...ranks.entries()].filter(([, r]) => r <= 4).sort((a, b) => a[1] - b[1]);
-  const card = (m: (typeof t.matches)[number]) => (
-    <MatchCard key={m.id} match={m} names={names} label={labels.get(m.id)} fluid raceText={raceText(t)} href={`/t/${t.slug}/matches/${m.id}`} />
-  );
 
   return (
     <div className={t.registrationOpen ? "grid gap-6 lg:grid-cols-[1fr_20rem]" : "space-y-6"}>
       <div className="space-y-6">
         {podium.length > 0 && (
-          <Card>
-            <CardHeader title="Final standings" />
-            <ol className="divide-y divide-border">
+          <section>
+            <SectionTitle>Final standings</SectionTitle>
+            <ol className={cx(panel, "divide-y divide-border")}>
               {podium.map(([entryId, rank]) => (
-                <li key={entryId} className="flex items-center gap-3 px-5 py-3">
-                  <span className={`w-10 font-bold ${rank === 1 ? "text-accent" : "text-muted"}`}>{ordinal(rank)}</span>
+                <li key={entryId} className="flex items-center gap-3 px-4 py-3">
+                  <span className={`w-10 font-display text-lg font-bold ${rank === 1 ? "text-accent" : "text-muted"}`}>{ordinal(rank)}</span>
                   <span className="font-medium">{names.get(entryId)}</span>
                 </li>
               ))}
             </ol>
-          </Card>
+          </section>
         )}
 
         {live.length > 0 && (
           <section>
             <SectionTitle>Live now</SectionTitle>
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{live.map(card)}</div>
+            <MatchRows matches={live} names={names} labels={labels} hrefFor={(m) => `/t/${t.slug}/matches/${m.id}`} />
           </section>
         )}
 
@@ -79,25 +75,25 @@ async function Overview({ params }: { params: PageProps<"/t/[slug]">["params"] }
         {recent.length > 0 && (
           <section>
             <SectionTitle>Latest results</SectionTitle>
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{recent.map(card)}</div>
+            <MatchRows matches={recent} names={names} labels={labels} hrefFor={(m) => `/t/${t.slug}/matches/${m.id}`} />
           </section>
         )}
 
         {t.description && (
-          <Card>
-            <CardHeader title="About" />
-            <p className="whitespace-pre-line px-5 py-4 text-sm">{t.description}</p>
-          </Card>
+          <section>
+            <SectionTitle>About</SectionTitle>
+            <p className={cx(panel, "px-4 py-4 text-sm whitespace-pre-line")}>{t.description}</p>
+          </section>
         )}
 
         {!t.matches.length && !t.description && (
-          <Card>
+          <div className={panel}>
             <EmptyState title="The draw hasn't been made yet">
               <Link href={`/t/${t.slug}/players`} className="text-accent hover:underline">
                 See who&apos;s entered
               </Link>
             </EmptyState>
-          </Card>
+          </div>
         )}
       </div>
 
