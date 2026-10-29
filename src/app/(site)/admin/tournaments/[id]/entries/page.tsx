@@ -44,11 +44,13 @@ async function Entries({ params }: { params: PageProps<"/admin/tournaments/[id]/
       )
     : new Map<string, number>();
   const showSave = (manual && !locked) || handicapped;
-  const pickerOptions = available.map((p) => ({
+  const option = (p: { id: string; firstName: string; lastName: string; nickname: string | null; homeClub: string | null }) => ({
     id: p.id,
     name: playerName(p),
     detail: [p.nickname && `“${p.nickname}”`, p.homeClub].filter(Boolean).join(" · ") || null,
-  }));
+  });
+  const pickerOptions = available.map(option);
+  const enteredOptions = t.entries.flatMap((e) => (e.partner ? [e.player, e.partner] : [e.player])).map(option);
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
@@ -152,7 +154,7 @@ async function Entries({ params }: { params: PageProps<"/admin/tournaments/[id]/
         <Card className="h-fit">
           <CardHeader title="Add a pair" />
           <ActionForm action={addPair.bind(null, t.id)} className="space-y-4 p-5" resetOnSuccess>
-            <PairPicker players={pickerOptions} />
+            <PairPicker players={pickerOptions} entered={enteredOptions} />
             <div className="grid grid-cols-[1fr_auto] gap-3">
               <Field label="Team name (optional)">
                 <Input name="teamName" placeholder="e.g. The Cue Balls" />
@@ -172,10 +174,8 @@ async function Entries({ params }: { params: PageProps<"/admin/tournaments/[id]/
         <Card className="h-fit">
           <CardHeader title="Add players" />
           <ActionForm action={addEntries.bind(null, t.id)} className="space-y-4 p-5" resetOnSuccess>
-            {available.length > 0 && <PlayerPicker players={pickerOptions} />}
-            <Field label="Or add a new player" hint="Adds them to the shared player directory too">
-              <Input name="newPlayer" placeholder="First Last" />
-            </Field>
+            <PlayerPicker players={pickerOptions} entered={enteredOptions} />
+            <p className="text-xs text-muted">New players are added to the shared player directory too.</p>
             <SubmitButton>Add to tournament</SubmitButton>
           </ActionForm>
         </Card>

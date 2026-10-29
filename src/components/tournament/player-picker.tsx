@@ -1,41 +1,40 @@
 "use client";
 
 import { useState } from "react";
-import { Input } from "../ui";
+import { PickChip, useClearOnSuccess, type Pick } from "./pair-picker";
+import { PlayerSearch, type PlayerOption } from "./player-search";
 
 /**
- * Checkbox list of directory players with a filter box. Filtered-out rows are hidden,
- * not removed, so ticks survive changing the search.
+ * Singles entries: type a name, pick them (or add them as new), and the box is ready for the next.
+ * Everyone picked is listed above the box and added together. Clears itself once its form succeeds.
  */
-export function PlayerPicker({ players }: { players: { id: string; name: string; detail?: string | null }[] }) {
-  const [query, setQuery] = useState("");
-  const q = query.trim().toLowerCase();
-  const matches = (p: (typeof players)[number]) => !q || `${p.name} ${p.detail ?? ""}`.toLowerCase().includes(q);
-  const shown = players.filter(matches).length;
+export function PlayerPicker({ players, entered }: { players: PlayerOption[]; entered: PlayerOption[] }) {
+  const [chosen, setChosen] = useState<Pick[]>([]);
+  const ref = useClearOnSuccess(() => setChosen([]));
+  const taken = new Set(chosen.map((c) => ("player" in c ? c.player.id : null)));
+  const newNames = new Set(chosen.map((c) => ("newName" in c ? c.newName.toLowerCase() : null)));
 
   return (
-    <div className="space-y-2">
-      <Input
-        type="search"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search the player directory…"
-        aria-label="Search players"
+    <div ref={ref} className="space-y-2">
+      {chosen.map((c, i) => (
+        <div key={"player" in c ? c.player.id : `new-${c.newName}`}>
+          {"player" in c ? (
+            <input type="hidden" name="playerId" value={c.player.id} />
+          ) : (
+            <input type="hidden" name="newPlayer" value={c.newName} />
+          )}
+          <PickChip pick={c} onRemove={() => setChosen(chosen.filter((_, j) => j !== i))} removeLabel="Remove" />
+        </div>
+      ))}
+      <span className="block pt-1 text-sm font-medium">{chosen.length ? "Add another" : "Player"}</span>
+      <PlayerSearch
+        label="Find or add a player"
+        players={players}
+        exclude={taken}
+        entered={entered}
+        onPick={(player) => setChosen([...chosen, { player }])}
+        onNew={(newName) => !newNames.has(newName.toLowerCase()) && setChosen([...chosen, { newName }])}
       />
-      <div className="max-h-80 space-y-1 overflow-y-auto rounded-lg border border-border p-2">
-        {players.map((p) => (
-          <label
-            key={p.id}
-            className="flex items-center gap-2 rounded px-2 py-1 text-sm hover:bg-surface-2"
-            style={matches(p) ? undefined : { display: "none" }}
-          >
-            <input type="checkbox" name="playerId" value={p.id} />
-            <span>{p.name}</span>
-            {p.detail && <span className="text-muted">· {p.detail}</span>}
-          </label>
-        ))}
-        {shown === 0 && <p className="px-2 py-1 text-sm text-muted">No match. Add them as a new player below.</p>}
-      </div>
     </div>
   );
 }

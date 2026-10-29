@@ -204,38 +204,45 @@ async function assertDrawNotMade(tournamentId: string) {
   }
 }
 
-/** Add existing players (checkbox list) and/or a new player typed by name. */
+/** Add players picked from the directory and/or new players typed by name. */
 export async function addEntries(tournamentId: string, _prev: ActionResult, formData: FormData) {
   return run(async () => {
     const { user, tournament } = await requireTournament(tournamentId);
     await assertDrawNotMade(tournamentId);
     if (tournament.entryType === "PAIRS") throw new Error("This is a pairs comp: add pairs instead");
-    const ids = formData.getAll("playerId").map(String);
-    const newName = String(formData.get("newPlayer") ?? "").trim();
-    if (newName) {
-      const [firstName, ...rest] = newName.split(/\s+/);
+    const ids = [...new Set(formData.getAll("playerId").map(String).filter(Boolean))];
+    // Check every new name before creating any, so a refused name leaves nothing behind.
+    const newPlayers: { firstName: string; lastName: string }[] = [];
+    for (const raw of new Set(formData.getAll("newPlayer").map((v) => String(v).trim().replace(/\s+/g, " ")).filter(Boolean))) {
+      const [firstName, ...rest] = raw.split(" ");
       const lastName = rest.join(" ");
+      if (!lastName) throw new Error(`${raw}: type their first and last name`);
       // Players are shared across organisers, so don't create a second record for someone already listed.
       const matches = await sameNamePlayers(firstName, lastName);
       if (matches.length) {
-        throw new Error(`${newName} is already in the player directory (${describeMatches(matches)}). Search for them in the list above.`);
+        throw new Error(`${raw} is already in the player directory (${describeMatches(matches)}). Pick them from the list instead.`);
       }
-      const p = await db.player.create({ data: { firstName, lastName, organizationId: user.organizationId } });
-      ids.push(p.id);
+      newPlayers.push({ firstName, lastName });
     }
-    if (!ids.length) throw new Error("Select at least one player");
+    if (!ids.length && !newPlayers.length) throw new Error("Choose at least one player");
     const players = await db.player.findMany({ where: { id: { in: ids } }, select: { id: true } });
     const current = await db.entry.count({ where: { tournamentId, status: { not: "WITHDRAWN" } } });
-    if (tournament.maxEntries && current + players.length > tournament.maxEntries) {
+    const adding = players.length + newPlayers.length;
+    if (tournament.maxEntries && current + adding > tournament.maxEntries) {
       throw new Error(`This tournament is limited to ${tournament.maxEntries} players`);
     }
-    for (const p of players) {
-      await db.entry.upsert({
-        where: { tournamentId_playerId: { tournamentId, playerId: p.id } },
-        create: { tournamentId, playerId: p.id, status: "CONFIRMED" },
-        update: { status: "CONFIRMED" },
-      });
-    }
+    await db.$transaction(async (tx) => {
+      for (const p of newPlayers) {
+        players.push({ id: (await tx.player.create({ data: { ...p, organizationId: user.organizationId } })).id });
+      }
+      for (const p of players) {
+        await tx.entry.upsert({
+          where: { tournamentId_playerId: { tournamentId, playerId: p.id } },
+          create: { tournamentId, playerId: p.id, status: "CONFIRMED" },
+          update: { status: "CONFIRMED" },
+        });
+      }
+    });
     publish(tournamentId);
     return `Added ${players.length} player${players.length === 1 ? "" : "s"}`;
   });
