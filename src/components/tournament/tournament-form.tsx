@@ -25,6 +25,7 @@ import {
   MAX_FRAMES,
 } from "@/lib/match-format";
 import { BREAK_RULES } from "@/lib/breaks";
+import { DEFAULT_FRAME_MINUTES } from "@/lib/timings";
 import { DEFAULT_TIEBREAKERS, TIEBREAKERS } from "@/lib/standings";
 import { ActionForm, SubmitButton, type FormAction } from "../forms";
 import { Button, Field, Input, Select, Textarea } from "../ui";
@@ -60,6 +61,7 @@ export type TournamentDefaults = {
   tiebreakers?: string[];
   plateQualifiers?: number | null;
   tablePerGroup?: boolean;
+  frameMinutes?: number;
 };
 
 export function TournamentForm({
@@ -216,7 +218,9 @@ export function TournamentForm({
           ))}
         </Select>
       </Field>
-      <div className="hidden sm:block" />
+      <Field label="Expected frame time (minutes)" hint="The baseline for the Timings tab and the projected finish before any frames are played">
+        <Input name="frameMinutes" type="number" min={1} max={90} defaultValue={defaults.frameMinutes ?? DEFAULT_FRAME_MINUTES} />
+      </Field>
       <Field label="Seeding" hint={`Manual: set seeds on the entries page; unseeded ${word} are drawn randomly`}>
         <Select name="seeding" defaultValue={defaults.seeding ?? "RANDOM"}>
           <option value="RANDOM">Random draw</option>

@@ -12,6 +12,7 @@ import { HANDICAP_STYLES, parseMatrixForm, parseStartTable, type HandicapStyle }
 import { FINISH_RULES, isFrameKind, LINEUP_MODES, majority, MAX_FRAMES } from "@/lib/match-format";
 import { DEFAULT_TIEBREAKERS, TIEBREAKERS } from "@/lib/standings";
 import { BREAK_RULES } from "@/lib/breaks";
+import { DEFAULT_FRAME_MINUTES } from "@/lib/timings";
 import { publish } from "@/lib/events";
 import {
   autoAssignTables,
@@ -37,6 +38,14 @@ function handicapSettings(style: HandicapStyle | undefined, fields: Record<strin
   }
   const starts = parseStartTable((key) => fields[key]);
   return starts.length ? { handicapStyle: style, handicapStarts: starts, handicapMatrix: Prisma.DbNull } : level;
+}
+
+/** The expected minutes per frame (the timings baseline); blank keeps the default. */
+function frameMinutes(value: string | undefined) {
+  if (!value?.trim()) return DEFAULT_FRAME_MINUTES;
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 1 || n > 90) throw new Error("Expected frame time must be 1–90 minutes");
+  return n;
 }
 
 /** Match format, group-table rules and plate from the settings form. */
@@ -74,6 +83,7 @@ function structureSettings(fields: Record<string, string>, entryType: string) {
     tiebreakers,
     plateQualifiers: plate || null,
     tablePerGroup: fields.tablePerGroup === "on",
+    frameMinutes: frameMinutes(fields.frameMinutes),
     // A frame-list match is won by a majority of its frames.
     ...(frames.length ? { raceTo: majority(frames.length), raceToFinal: undefined } : {}),
   };

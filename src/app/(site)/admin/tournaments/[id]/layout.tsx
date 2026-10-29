@@ -53,7 +53,12 @@ async function Header({ params }: { params: LayoutProps<"/admin/tournaments/[id]
             tabs={[
               { href: base, label: "Control room" },
               { href: `${base}/entries`, label: `${t.entryType === "PAIRS" ? "Pairs" : "Entries"} (${t.entries.length})` },
-              ...(t.matches.length ? [{ href: `${base}/bracket`, label: "Bracket" }] : []),
+              ...(t.matches.length
+                ? [
+                    { href: `${base}/bracket`, label: "Bracket" },
+                    { href: `${base}/timings`, label: "Timings" },
+                  ]
+                : []),
               { href: `${base}/settings`, label: "Settings" },
             ]}
           />

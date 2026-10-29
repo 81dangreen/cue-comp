@@ -175,6 +175,8 @@ model Tournament {
   plateQualifiers    Int?
   // Give each group its own table at the venue; auto-pilot keeps the group's matches there.
   tablePerGroup      Boolean      @default(false)
+  // Expected minutes per frame: the baseline the timings page measures the comp against.
+  frameMinutes       Int          @default(15)
   createdAt          DateTime     @default(now())
   organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   venue              Venue?       @relation(fields: [venueId], references: [id], onDelete: SetNull)
@@ -253,6 +255,8 @@ model Match {
   loserToId    String?
   loserToSlot  Int?
   tableId      String?
+  // When the match was sent to its current table (for the time players take to start).
+  calledAt     DateTime?
   startedAt    DateTime?
   breakSlot    Int? // who broke first (1 or 2)
   // Handicap fixed when the match starts: starting scores, and per-side race targets (null = raceTo).

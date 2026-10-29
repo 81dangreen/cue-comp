@@ -65,7 +65,7 @@ async function persist(tx: Tx, matches: Map<string, EngineMatch>, changed: Itera
   // A reopened result can send downstream matches back to waiting; they lose their table.
   await tx.match.updateMany({
     where: { id: { in: [...changed] }, status: { in: ["PENDING", "VOID"] }, tableId: { not: null } },
-    data: { tableId: null },
+    data: { tableId: null, calledAt: null },
   });
 }
 
@@ -685,7 +685,9 @@ export async function assignTable(matchId: string, tableId: string | null) {
     });
     if (busy) throw new ServiceError("That table already has a match on it");
   }
-  await db.match.update({ where: { id: matchId }, data: { tableId } });
+  // The call time restarts only when the match moves to a different table.
+  const calledAt = !tableId ? null : tableId === m.tableId ? m.calledAt : new Date();
+  await db.match.update({ where: { id: matchId }, data: { tableId, calledAt } });
   publish(m.tournamentId, [m.tableId, tableId]);
 }
 
@@ -720,7 +722,7 @@ export async function autoAssignTables(tournamentId: string) {
       waiting.find((m) => !used.has(m.id) && !(m.groupId && hasOwnTable.has(m.groupId)));
     if (!pick) continue;
     used.add(pick.id);
-    await db.match.update({ where: { id: pick.id }, data: { tableId: table.id } });
+    await db.match.update({ where: { id: pick.id }, data: { tableId: table.id, calledAt: new Date() } });
     assigned.push(table.id);
   }
   publish(tournamentId, assigned);

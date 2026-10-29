@@ -118,6 +118,24 @@ The tablet shows the match score, a strip of every frame, and big "who won this 
 Each frame records who played it; the public match page lists them. Rules live in `src/lib/match-format.ts` and
 `src/lib/standings.ts`.
 
+## Timings and projected finish
+
+Each comp has an **expected frame time** (settings; default 15 minutes) used as its baseline. The admin **Timings**
+tab shows how the comp is running against it:
+
+- **Overview**: projected finish, time ahead of or behind the baseline so far, average frame and match, matches left,
+  and how long players take to start once a match is sent to their table.
+- **Tables**: frames, average frame, frames per hour, time in play and idle time.
+- **Players**: average, quickest and longest frame (slowest first). A doubles frame counts for all four players, a
+  singles frame for the two who played it.
+- **Matches**: start time, time to start, length, frames and average frame.
+
+Frame times come from when each frame is scored (the first from the match start). Frames over 45 minutes are left out
+as scoring slips; walkovers and results entered without frames aren't timed. The projection plays out the remaining
+matches on the venue's tables in bracket order, at a pace that starts at the baseline and moves to the comp's real
+average as frames come in. It includes a not-yet-drawn knockout (estimated from the qualifier numbers) and leaves out a
+grand final reset until it's needed. Logic in `src/lib/timings.ts`.
+
 ## Deploying (Render)
 
 The app runs as **one always-on Node server plus Postgres**. Live updates are passed around inside the server process,
