@@ -12,25 +12,40 @@ type Props = {
 
 const QUEUE_LIMIT = 12;
 
-function Teams({ m, names, stacked }: { m: MatchWithTable; names: Map<string, string>; stacked?: boolean }) {
-  if (stacked) {
-    // One pair per line on phones, where long pair names would otherwise wrap mid-name.
-    return (
-      <span className="min-w-0 leading-snug">
-        <span className="block font-medium sm:inline">{names.get(m.entry1Id!)}</span>
-        <span className="block sm:inline">
-          <span className="mr-1.5 text-muted sm:ml-1.5">v</span>
-          <span className="font-medium">{names.get(m.entry2Id!)}</span>
-        </span>
-      </span>
-    );
-  }
+/**
+ * A fixture: first pair right-aligned, the score (or "v") in a fixed middle column, second pair
+ * left-aligned, so the scores line up down the list. Long names wrap within their own column.
+ */
+function Fixture({ m, names }: { m: MatchWithTable; names: Map<string, string> }) {
+  const live = m.status === "LIVE";
   return (
-    <span className="min-w-0">
-      <span className="font-medium">{names.get(m.entry1Id!)}</span>
-      <span className="mx-1.5 text-muted">v</span>
-      <span className="font-medium">{names.get(m.entry2Id!)}</span>
+    <span className="grid min-w-0 grid-cols-[minmax(0,1fr)_3.75rem_minmax(0,1fr)] items-center gap-2 sm:grid-cols-[minmax(0,1fr)_4.5rem_minmax(0,1fr)] sm:gap-3">
+      <span className="text-right text-sm leading-snug font-medium break-words sm:text-base">
+        <SideName name={names.get(m.entry1Id!)} />
+      </span>
+      <span
+        className={cx(
+          "justify-self-center rounded-md px-2 py-0.5 text-center tabular-nums",
+          live ? "bg-surface-2 font-display text-xl font-bold text-foreground ring-1 ring-border" : "text-sm text-muted",
+        )}
+      >
+        {live ? `${m.score1} – ${m.score2}` : "v"}
+      </span>
+      <span className="text-sm leading-snug font-medium break-words sm:text-base">
+        <SideName name={names.get(m.entry2Id!)} />
+      </span>
     </span>
+  );
+}
+
+/** A pair's name breaks at the "&" on phones (one player per line) rather than mid-name. */
+function SideName({ name = "" }: { name?: string }) {
+  const parts = name.split(" & ");
+  if (parts.length !== 2) return <>{name}</>;
+  return (
+    <>
+      <span className="block sm:inline">{parts[0]}&nbsp;&amp;</span> <span className="block sm:inline">{parts[1]}</span>
+    </>
   );
 }
 
@@ -62,7 +77,7 @@ export function OrderOfPlay({ order, names, labels, hrefFor }: Props) {
                         <Link
                           href={hrefFor(m)}
                           className={cx(
-                            "grid grid-cols-[3.5rem_1fr_auto] items-center gap-3 px-4 py-3 text-base hover:bg-surface-2",
+                            "grid grid-cols-[3rem_minmax(0,1fr)] items-center gap-2 px-3 py-3 text-base hover:bg-surface-2 sm:grid-cols-[3.5rem_minmax(0,1fr)] sm:gap-3 sm:px-4",
                             live && "bg-live/5",
                             next && "bg-pop/10",
                           )}
@@ -75,12 +90,7 @@ export function OrderOfPlay({ order, names, labels, hrefFor }: Props) {
                           >
                             {live ? "Now" : next ? "Next" : `${i + 1}`}
                           </span>
-                          <Teams m={m} names={names} stacked />
-                          {live && (
-                            <span className="font-display text-2xl font-bold tabular-nums">
-                              {m.score1}–{m.score2}
-                            </span>
-                          )}
+                          <Fixture m={m} names={names} />
                         </Link>
                       </li>
                     );
@@ -99,7 +109,7 @@ export function OrderOfPlay({ order, names, labels, hrefFor }: Props) {
             <thead className="bg-surface-2 text-xs text-muted">
               <tr className="border-b border-border">
                 <th className="w-12 px-4 py-2 text-left font-medium">#</th>
-                <th className="px-2 py-2 text-left font-medium">Match</th>
+                <th className="px-2 py-2 text-center font-medium">Match</th>
                 <th className="hidden px-2 py-2 text-left font-medium sm:table-cell">Round</th>
                 <th className="px-4 py-2 text-right font-medium">Table</th>
               </tr>
@@ -109,10 +119,10 @@ export function OrderOfPlay({ order, names, labels, hrefFor }: Props) {
                 <tr key={m.id} className={cx("border-b border-border last:border-0", m.table && "bg-pop/10")}>
                   <td className="px-4 py-2.5 font-display text-lg font-bold text-muted tabular-nums">{i + 1}</td>
                   <td className="px-2 py-2.5">
-                    <Link href={hrefFor(m)} className="hover:text-accent">
-                      <Teams m={m} names={names} />
+                    <Link href={hrefFor(m)} className="block hover:text-accent">
+                      <Fixture m={m} names={names} />
                     </Link>
-                    <span className="block text-xs text-muted sm:hidden">{labels.get(m.id)}</span>
+                    <span className="block text-center text-xs text-muted sm:hidden">{labels.get(m.id)}</span>
                   </td>
                   <td className="hidden px-2 py-2.5 text-sm text-muted sm:table-cell">{labels.get(m.id)}</td>
                   <td className="px-4 py-2.5 text-right text-sm whitespace-nowrap">
