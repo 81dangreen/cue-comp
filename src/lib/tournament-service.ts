@@ -7,6 +7,7 @@ import { db } from "./db";
 import { publish } from "./events";
 import {
   distributeIntoGroups,
+  drawToSeedOrder,
   doubleElimination,
   groupName,
   MatchSpec,
@@ -17,6 +18,7 @@ import {
 } from "./bracket";
 import { completeDraw, completeMatch, EngineError, EngineMatch, reopenMatch } from "./engine-core";
 import { computeHandicap, parseStartMatrix, type MatchHandicap } from "./handicap";
+import { drawsIntoGroups, manualDrawOrder, manualDrawProblems, manualGroups } from "./manual-draw";
 import {
   drawLineup,
   frameAt,
@@ -228,15 +230,22 @@ export async function generateDraw(tournamentId: string) {
     await freezeRanks(tx, tournamentId, t.discipline);
     await tx.group.deleteMany({ where: { tournamentId } });
 
-    const order = seededEntryIds(t.entries, t.seeding);
+    const groupCount = t.format === "ROUND_ROBIN" ? 1 : Math.max(1, t.groupCount ?? 2);
+    // A draw entered by hand is used exactly as entered; otherwise seeds then a random draw.
+    const drawn = t.seeding === "DRAWN";
+    if (drawn) {
+      const problems = manualDrawProblems(t.entries, t.format, groupCount, word);
+      if (problems.length) throw new ServiceError(`The draw isn't complete: ${problems.join("; ")}`);
+    }
+    const order = drawn ? manualDrawOrder(t.entries) : seededEntryIds(t.entries, t.seeding);
+    const bracketOrder = drawn ? drawToSeedOrder(order) : order;
     const race = { raceTo: t.raceTo, raceToFinal: t.raceToFinal };
 
     if (t.format === "SINGLE_ELIM") {
-      await createMatches(tx, tournamentId, singleElimination(order, race));
+      await createMatches(tx, tournamentId, singleElimination(bracketOrder, race));
     } else if (t.format === "DOUBLE_ELIM") {
-      await createMatches(tx, tournamentId, doubleElimination(order, race, { grandFinalReset: t.grandFinalReset }));
+      await createMatches(tx, tournamentId, doubleElimination(bracketOrder, race, { grandFinalReset: t.grandFinalReset }));
     } else {
-      const groupCount = t.format === "ROUND_ROBIN" ? 1 : Math.max(1, t.groupCount ?? 2);
       if (t.format === "GROUPS_KO" && order.length < groupCount * 2) {
         throw new ServiceError(`Need at least ${groupCount * 2} ${word} for ${groupCount} groups`);
       }
@@ -244,7 +253,7 @@ export async function generateDraw(tournamentId: string) {
       if (t.tablePerGroup && tables.length < groupCount) {
         throw new ServiceError(`Each group needs its own table: ${groupCount} groups but ${tables.length} tables at the venue`);
       }
-      const buckets = distributeIntoGroups(order, groupCount);
+      const buckets = drawn && drawsIntoGroups(t.format) ? manualGroups(t.entries, groupCount) : distributeIntoGroups(order, groupCount);
       const groupIds = new Map<string, string>();
       const specs: MatchSpec[] = [];
       for (let i = 0; i < buckets.length; i++) {

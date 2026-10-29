@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeTimings, estimatedStarts, frameDurations, projectFinish, type TimedMatch, type TimingsInput } from "./timings";
+import { computeTimings, estimatedStarts, frameDurations, plannedFinish, projectFinish, type TimedMatch, type TimingsInput } from "./timings";
 
 const T0 = new Date("2026-11-14T10:00:00Z");
 const at = (min: number) => new Date(+T0 + min * 60_000);
@@ -197,5 +197,17 @@ describe("estimatedStarts", () => {
 
   it("has nothing to say before anything is played or a start time is set", () => {
     expect(estimatedStarts(input({ now: at(0), matches: [match({ id: "a", status: "READY" })] })).size).toBe(0);
+  });
+});
+
+describe("plannedFinish", () => {
+  it("replays the draw from the first break at the baseline pace, ignoring what's been played", () => {
+    const semi1 = match({ id: "s1", winnerToId: "f", status: "COMPLETED", startedAt: at(0), completedAt: at(200), frames: frames(100, 200) });
+    const semi2 = match({ id: "s2", position: 2, winnerToId: "f", status: "COMPLETED", startedAt: at(0), completedAt: at(50), frames: frames(25, 50) });
+    const final = match({ id: "f", round: 2, status: "LIVE", startedAt: at(210) });
+    const tables = [{ id: "t1", name: "1" }, { id: "t2", name: "2" }];
+    const plan = plannedFinish(input({ now: at(300), tables, matches: [semi1, semi2, final] }), at(0))!;
+    const fresh = projectFinish(input({ now: at(0), tables, matches: [match({ id: "s1", winnerToId: "f" }), match({ id: "s2", position: 2, winnerToId: "f" }), match({ id: "f", round: 2 })] }), 15 * MIN, 3 * MIN)!;
+    expect(+plan).toBe(+fresh.finishAt);
   });
 });

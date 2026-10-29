@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { DISCIPLINES, FORMATS } from "@/lib/constants";
+import { DISCIPLINES, FORMATS, SEEDING } from "@/lib/constants";
 import {
   computeHandicap,
   describeHandicap,
@@ -222,10 +222,16 @@ export function TournamentForm({
       <Field label="Expected frame time (minutes)" hint="The baseline for the Timings tab and the projected finish before any frames are played">
         <Input name="frameMinutes" type="number" min={1} max={90} defaultValue={defaults.frameMinutes ?? DEFAULT_FRAME_MINUTES} />
       </Field>
-      <Field label="Seeding" hint={`Manual: set seeds on the entries page; unseeded ${word} are drawn randomly`}>
+      <Field
+        label="Draw"
+        hint={`Manual seeds: set seeds on the entries page; unseeded ${word} are drawn randomly. Enter the draw yourself: done in the room (e.g. on a spin-the-wheel), then typed in on the entries page`}
+      >
         <Select name="seeding" defaultValue={defaults.seeding ?? "RANDOM"}>
-          <option value="RANDOM">Random draw</option>
-          <option value="MANUAL">Manual seeds</option>
+          {Object.entries(SEEDING).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
         </Select>
       </Field>
       <div className="flex flex-col justify-center gap-2 pt-5">

@@ -409,3 +409,26 @@ export function projectFinish(input: TimingsInput, frameMs: number, changeoverMs
     starts,
   };
 }
+
+/**
+ * What the projection would have said at the first break, at the baseline pace: the comp replayed
+ * from its draw with nothing played. A knockout drawn later from the groups is estimated, as it was then.
+ */
+export function plannedFinish(input: TimingsInput, firstStart: Date) {
+  const knockoutLater = input.format === "GROUPS_KO";
+  const matches = input.matches
+    .filter((m) => !(knockoutLater && m.bracket !== "GROUP"))
+    .map((m) => ({
+      ...m,
+      status: m.status === "VOID" && !m.isBye ? "VOID" : "PENDING",
+      frames: [],
+      score1: 0,
+      score2: 0,
+      tableId: null,
+      calledAt: null,
+      startedAt: null,
+      completedAt: null,
+    }));
+  const plan = projectFinish({ ...input, now: firstStart, startsAt: null, matches }, input.frameMinutes * 60_000, DEFAULT_CHANGEOVER_MS);
+  return plan?.finishAt ?? null;
+}

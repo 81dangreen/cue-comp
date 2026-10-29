@@ -144,7 +144,7 @@ model Tournament {
   status             String       @default("DRAFT") // DRAFT | REGISTRATION | IN_PROGRESS | COMPLETED
   registrationOpen   Boolean      @default(false)
   isPublic           Boolean      @default(true)
-  seeding            String       @default("RANDOM") // RANDOM | MANUAL
+  seeding            String       @default("RANDOM") // RANDOM | MANUAL | DRAWN (the organiser enters the draw)
   groupCount         Int?
   qualifiersPerGroup Int?
   grandFinalReset    Boolean      @default(true)
@@ -196,7 +196,10 @@ model Entry {
   // Second player of a pair (pairs comps).
   partnerId    String?
   teamName     String?
+  // Manual seeding: the seed. A draw entered by hand: the order drawn (knockouts).
   seed         Int?
+  // A draw entered by hand into groups: the group index (0 = Group A) until the draw is made.
+  drawGroup    Int?
   status       String     @default("CONFIRMED") // REGISTERED | CONFIRMED | WITHDRAWN
   groupId      String?
   finalRank    Int?

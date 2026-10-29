@@ -6,8 +6,9 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireTournament, requireUser } from "@/lib/auth";
-import { DISCIPLINES, FORMATS } from "@/lib/constants";
+import { DISCIPLINES, FORMATS, SEEDING, type Seeding } from "@/lib/constants";
 import { describeMatches, sameNamePlayers } from "@/lib/directory";
+import { drawsIntoGroups } from "@/lib/manual-draw";
 import { HANDICAP_STYLES, parseMatrixForm, parseStartTable, type HandicapStyle } from "@/lib/handicap";
 import { FINISH_RULES, isFrameKind, LINEUP_MODES, majority, MAX_FRAMES } from "@/lib/match-format";
 import { DEFAULT_TIEBREAKERS, TIEBREAKERS } from "@/lib/standings";
@@ -103,7 +104,7 @@ const tournamentSchema = z
     entryFee: z.string().max(40).optional(),
     startsAt: z.coerce.date().optional(),
     venueId: z.string().optional(),
-    seeding: z.enum(["RANDOM", "MANUAL"]).default("RANDOM"),
+    seeding: z.enum(Object.keys(SEEDING) as [Seeding]).default("RANDOM"),
     groupCount: z.coerce.number().int().min(1).max(32).optional(),
     qualifiersPerGroup: z.coerce.number().int().min(1).max(8).optional(),
     grandFinalReset: z.string().optional(),
@@ -365,15 +366,29 @@ export async function saveEntries(tournamentId: string, _prev: ActionResult, for
         await db.entry.update({ where: { id: e.id }, data: { rank: override } });
       }
     }
-    if (tournament.seeding !== "MANUAL" || drawMade) return "Saved";
+    if (tournament.seeding === "RANDOM" || drawMade) return "Saved";
 
+    // A hand-entered draw into groups: each entry's group.
+    if (tournament.seeding === "DRAWN" && drawsIntoGroups(tournament.format)) {
+      const groupCount = Math.max(1, tournament.groupCount ?? 2);
+      for (const e of entries) {
+        const raw = String(formData.get(`group-${e.id}`) ?? "");
+        const drawGroup = raw === "" ? null : Number(raw);
+        if (drawGroup !== null && (!Number.isInteger(drawGroup) || drawGroup < 0 || drawGroup >= groupCount)) throw new Error("Choose a group from the list");
+        await db.entry.update({ where: { id: e.id }, data: { drawGroup } });
+      }
+      return "Saved";
+    }
+
+    // Seeds, or a hand-entered knockout draw's numbers (the order drawn).
+    const label = tournament.seeding === "DRAWN" ? "Draw number" : "Seed";
     const seen = new Set<number>();
     for (const e of entries) {
       const raw = String(formData.get(`seed-${e.id}`) ?? "").trim();
       const seed = raw ? Number(raw) : null;
       if (seed !== null) {
-        if (!Number.isInteger(seed) || seed < 1) throw new Error("Seeds must be whole numbers from 1");
-        if (seen.has(seed)) throw new Error(`Seed ${seed} is used twice`);
+        if (!Number.isInteger(seed) || seed < 1) throw new Error(`${label}s must be whole numbers from 1`);
+        if (seen.has(seed)) throw new Error(`${label} ${seed} is used twice`);
         seen.add(seed);
       }
       await db.entry.update({ where: { id: e.id }, data: { seed } });

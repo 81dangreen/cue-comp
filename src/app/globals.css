@@ -164,3 +164,20 @@ body {
 .live-dot {
   animation: live-pulse 1.4s ease-in-out infinite;
 }
+
+/* Printouts (the end-of-day report) are always light, whatever theme is on screen. */
+@media print {
+  :root,
+  :root[data-theme] {
+    color-scheme: light;
+    --background: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #f3f5f8;
+    --border: #d3d9e1;
+    --foreground: #0f1720;
+    --muted: #4b5563;
+    --accent: #1d4ed8;
+    --accent-soft: #e0e9ff;
+    --warn: #9a4a00;
+  }
+}

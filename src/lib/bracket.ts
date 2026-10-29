@@ -51,6 +51,26 @@ export function seedPositions(size: number): number[] {
   return positions;
 }
 
+/**
+ * A draw entered by hand (e.g. off a spin-the-wheel), turned into the seed order the bracket
+ * builder expects, so the first round reads top to bottom: 1st drawn v 2nd, 3rd v 4th, ...
+ * Byes go where the automatic draw puts them (spread through the bracket); the next name drawn
+ * takes each bye line.
+ */
+export function drawToSeedOrder(drawOrder: string[]): string[] {
+  const n = drawOrder.length;
+  const size = Math.max(2, nextPowerOfTwo(n));
+  const order = seedPositions(size);
+  const seeds: string[] = new Array(n);
+  let next = 0;
+  for (let p = 0; p < size / 2; p++) {
+    const [s1, s2] = [order[2 * p], order[2 * p + 1]];
+    if (s1 <= n) seeds[s1 - 1] = drawOrder[next++];
+    if (s2 <= n) seeds[s2 - 1] = drawOrder[next++];
+  }
+  return seeds;
+}
+
 export function nextPowerOfTwo(n: number): number {
   let size = 1;
   while (size < n) size *= 2;

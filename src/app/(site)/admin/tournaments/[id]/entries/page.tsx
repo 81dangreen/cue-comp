@@ -3,11 +3,13 @@ import { Suspense } from "react";
 import { addEntries, addPair, confirmEntry, removeEntry, saveEntries } from "@/actions/tournaments";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { entryName, getTournamentFull, playerName } from "@/lib/queries";
+import { drawToSeedOrder, groupName, singleElimination } from "@/lib/bracket";
+import { drawsIntoGroups, manualDrawOrder, manualDrawProblems, manualGroups } from "@/lib/manual-draw";
+import { entryName, entryNames, getTournamentFull, playerName, type TournamentFull } from "@/lib/queries";
 import { ActionButton, ActionForm, SubmitButton } from "@/components/forms";
 import { PairPicker } from "@/components/tournament/pair-picker";
 import { PlayerPicker } from "@/components/tournament/player-picker";
-import { Badge, Card, CardHeader, EmptyState, Field, Input, PageSkeleton } from "@/components/ui";
+import { Badge, Card, CardHeader, EmptyState, Field, Input, PageSkeleton, Select } from "@/components/ui";
 
 export default function EntriesPage({ params }: PageProps<"/admin/tournaments/[id]/entries">) {
   return (
@@ -30,8 +32,16 @@ async function Entries({ params }: { params: PageProps<"/admin/tournaments/[id]/
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
     select: { id: true, firstName: true, lastName: true, nickname: true, homeClub: true },
   });
-  const entries = [...t.entries].sort((a, b) => (a.seed ?? 999) - (b.seed ?? 999) || entryName(a).localeCompare(entryName(b)));
   const manual = t.seeding === "MANUAL";
+  // A draw entered by hand: knockouts take a draw number per entry, groups + knockout a group.
+  const drawn = t.seeding === "DRAWN";
+  const intoGroups = drawn && drawsIntoGroups(t.format);
+  const groupCount = Math.max(1, t.groupCount ?? 2);
+  const entries = [...t.entries].sort((a, b) =>
+    intoGroups
+      ? (a.drawGroup ?? 99) - (b.drawGroup ?? 99) || +a.createdAt - +b.createdAt
+      : (a.seed ?? 999) - (b.seed ?? 999) || entryName(a).localeCompare(entryName(b)),
+  );
   const handicapped = !!t.handicapStyle;
   // Before the draw, entries without a rank show the player's current rank for this discipline.
   const playerRanks = handicapped
@@ -43,7 +53,7 @@ async function Entries({ params }: { params: PageProps<"/admin/tournaments/[id]/
         ).map((r) => [r.playerId, r.rank]),
       )
     : new Map<string, number>();
-  const showSave = (manual && !locked) || handicapped;
+  const showSave = ((manual || drawn) && !locked) || handicapped;
   const option = (p: { id: string; firstName: string; lastName: string; nickname: string | null; homeClub: string | null }) => ({
     id: p.id,
     name: playerName(p),
@@ -58,7 +68,15 @@ async function Entries({ params }: { params: PageProps<"/admin/tournaments/[id]/
         <CardHeader
           title={`${pairs ? "Pairs" : "Entries"} (${t.entries.length}${t.maxEntries ? ` / ${t.maxEntries}` : ""})`}
           subtitle={[
-            locked ? "The draw has been made — reset it to change entries." : manual ? "Manual seeding: enter seeds then save." : null,
+            locked
+              ? "The draw has been made — reset it to change entries."
+              : manual
+                ? "Manual seeding: enter seeds then save."
+                : intoGroups
+                  ? "Enter the draw: choose each one's group as it's drawn, then save."
+                  : drawn
+                    ? "Enter the draw: number each one in the order drawn, then save. The bracket fills top to bottom: 1 v 2, 3 v 4, …"
+                    : null,
             handicapped && pairs
               ? "Give each pair its handicap group (1 = strongest). The start between groups is set in the tournament settings."
               : handicapped
@@ -73,12 +91,15 @@ async function Entries({ params }: { params: PageProps<"/admin/tournaments/[id]/
         ) : (
           <>
             {/* Seed and rank inputs belong to the form below via the `form` attribute, so the
-                per-row Confirm/Remove buttons can have their own forms without nesting. */}
+                per-row Confirm/Remove buttons can have their own forms without nesting. Each is
+                keyed by its saved value: React resets the form after saving, and the new key
+                remounts the field with what was saved. */}
             <ul className="divide-y divide-border">
               {entries.map((e) => (
                 <li key={e.id} className="flex items-center gap-3 px-5 py-2.5">
-                  {manual && (
+                  {(manual || (drawn && !intoGroups)) && (
                     <Input
+                      key={`seed-${e.seed ?? ""}`}
                       form="entries-form"
                       name={`seed-${e.id}`}
                       type="number"
@@ -86,9 +107,27 @@ async function Entries({ params }: { params: PageProps<"/admin/tournaments/[id]/
                       defaultValue={e.seed ?? ""}
                       disabled={locked}
                       className="w-16 py-1 text-center"
-                      aria-label="Seed"
-                      placeholder="–"
+                      aria-label={drawn ? "Draw number" : "Seed"}
+                      placeholder={drawn ? "#" : "–"}
                     />
+                  )}
+                  {intoGroups && (
+                    <Select
+                      key={`group-${e.drawGroup ?? ""}`}
+                      form="entries-form"
+                      name={`group-${e.id}`}
+                      defaultValue={e.drawGroup ?? ""}
+                      disabled={locked}
+                      className="w-28 py-1"
+                      aria-label="Group"
+                    >
+                      <option value="">Group…</option>
+                      {Array.from({ length: groupCount }, (_, i) => (
+                        <option key={i} value={i}>
+                          Group {groupName(i)}
+                        </option>
+                      ))}
+                    </Select>
                   )}
                   <span className="flex-1 font-medium">
                     {entryName(e)}
@@ -113,6 +152,7 @@ async function Entries({ params }: { params: PageProps<"/admin/tournaments/[id]/
                         "Rank"
                       )}
                       <Input
+                        key={`rank-${e.rank ?? ""}`}
                         form="entries-form"
                         name={`rank-${e.id}`}
                         type="number"
@@ -141,14 +181,18 @@ async function Entries({ params }: { params: PageProps<"/admin/tournaments/[id]/
               <ActionForm id="entries-form" action={saveEntries.bind(null, t.id)} className="border-t border-border p-4">
                 <SubmitButton variant="secondary">
                   {handicapped
-                    ? `Save ${manual && !locked ? "seeds & " : ""}${pairs ? "handicap groups" : "ranks"}`
-                    : "Save seeds"}
+                    ? `Save ${manual && !locked ? "seeds & " : drawn && !locked ? "draw & " : ""}${pairs ? "handicap groups" : "ranks"}`
+                    : drawn
+                      ? "Save draw"
+                      : "Save seeds"}
                 </SubmitButton>
               </ActionForm>
             )}
           </>
         )}
       </Card>
+
+      {drawn && !locked && entries.length > 0 && <DrawPreview t={t} groupCount={groupCount} word={pairs ? "pairs" : "players"} />}
 
       {!locked && pairs && (
         <Card className="h-fit">
@@ -181,5 +225,62 @@ async function Entries({ params }: { params: PageProps<"/admin/tournaments/[id]/
         </Card>
       )}
     </div>
+  );
+}
+
+/** What the hand-entered draw will make, so it can be checked against the draw in the room first. */
+function DrawPreview({ t, groupCount, word }: { t: TournamentFull; groupCount: number; word: string }) {
+  const confirmed = t.entries.filter((e) => e.status === "CONFIRMED");
+  const names = entryNames(t.entries);
+  const problems = manualDrawProblems(confirmed, t.format, groupCount, word);
+  const groups = drawsIntoGroups(t.format);
+  const round1 = groups
+    ? []
+    : singleElimination(drawToSeedOrder(manualDrawOrder(confirmed)), { raceTo: t.raceTo })
+        .filter((m) => m.round === 1)
+        .sort((a, b) => a.position - b.position)
+        .map((m) => [m.slot1, m.slot2].map((s) => (s.type === "entry" && s.entryId ? names.get(s.entryId) : null)));
+  return (
+    <Card className="lg:col-start-1">
+      <CardHeader
+        title="Draw preview"
+        subtitle={
+          problems.length
+            ? "Finish entering the draw to see what it makes."
+            : "Check this against the draw in the room, then make the draw in the control room."
+        }
+      />
+      {problems.length ? (
+        <ul className="space-y-1 px-5 py-4 text-sm text-warn">
+          {problems.map((p) => (
+            <li key={p}>{p}</li>
+          ))}
+        </ul>
+      ) : groups ? (
+        <div className="grid gap-px bg-border sm:grid-cols-2">
+          {manualGroups(confirmed, groupCount).map((ids, i) => (
+            <div key={i} className="bg-surface px-5 py-3">
+              <div className="font-display text-lg font-bold uppercase">Group {groupName(i)}</div>
+              <ol className="mt-1 space-y-0.5 text-sm">
+                {ids.map((id) => (
+                  <li key={id}>{names.get(id)}</li>
+                ))}
+              </ol>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <ol className="divide-y divide-border">
+          {round1.map(([a, b], i) => (
+            <li key={i} className="grid grid-cols-[2.5rem_minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-5 py-2 text-sm">
+              <span className="font-display text-base font-bold text-muted">{i + 1}</span>
+              <span className={a ? "text-right font-medium" : "text-right text-muted"}>{a ?? "Bye"}</span>
+              <span className="text-muted">v</span>
+              <span className={b ? "font-medium" : "text-muted"}>{b ?? "Bye"}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </Card>
   );
 }

@@ -50,7 +50,7 @@ async function Players({ params }: { params: PageProps<"/t/[slug]/players">["par
             </span>
             {!e.partner && e.player.nickname && <span className="text-sm text-muted">“{e.player.nickname}”</span>}
             {t.handicapStyle && e.rank && <Badge tone="accent">{e.partner ? `Group ${e.rank}` : `Rank ${e.rank}`}</Badge>}
-            {e.seed && <Badge>Seed {e.seed}</Badge>}
+            {t.seeding === "MANUAL" && e.seed && <Badge>Seed {e.seed}</Badge>}
             {e.status === "REGISTERED" && <Badge tone="warn">Awaiting confirmation</Badge>}
           </li>
         ))}

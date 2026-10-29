@@ -140,6 +140,19 @@ that, on all the venue's tables. Logic in `src/lib/timings.ts`.
 The same projection gives each upcoming match an **estimated start** on the public order of play ("about 14:40",
 "Due now"), rounded to 5 minutes. Organisers can turn this off in the settings ("Show estimated start times").
 
+**End-of-day report** (`/report/[id]`, linked from the Timings tab; organisers only): results, the day against the
+plan (the projection at the first break, at baseline pace), highlights (longest and quickest match, longest frame,
+break & runs, reverse dishes, quickest players and longest average frames), tables and every result with its length.
+It prints, or saves as a PDF, on plain white.
+
+## Entering the draw yourself
+
+Set **Draw → Enter the draw yourself** in the settings when the draw is done in the room (e.g. on a spin-the-wheel).
+On the entries page, give each entry its **draw number** (the order drawn) for knockouts, or its **group** for
+groups + knockout, and save. A preview shows the first-round matches or groups to check against the room before
+making the draw. Knockouts fill top to bottom (1 v 2, 3 v 4, …); byes go where the automatic draw puts them, spread
+through the bracket. Logic in `src/lib/manual-draw.ts` and `drawToSeedOrder` in `src/lib/bracket.ts`.
+
 ## Deploying (Render)
 
 The app runs as **one always-on Node server plus Postgres**. Live updates are passed around inside the server process,

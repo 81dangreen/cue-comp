@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   distributeIntoGroups,
+  drawToSeedOrder,
   doubleElimination,
   orderQualifiers,
   resolveInitialState,
@@ -177,5 +178,29 @@ describe("roundLabel", () => {
     expect(roundLabel("WINNERS", 3, 3, { doubleElim: true })).toBe("Winners Final");
     expect(roundLabel("WINNERS", 2, 3, { doubleElim: true })).toBe("Semi Finals");
     expect(roundLabel("FINAL", 1, 2)).toBe("Grand Final");
+  });
+});
+
+describe("drawToSeedOrder (a draw entered by hand)", () => {
+  const firstRound = (draw: string[]) =>
+    singleElimination(drawToSeedOrder(draw), { raceTo: 3 })
+      .filter((m) => m.round === 1)
+      .sort((a, b) => a.position - b.position)
+      .map((m) => [m.slot1, m.slot2].map((s) => (s.type === "entry" ? (s.entryId ?? "bye") : "?")).join(" v "));
+
+  it("pairs the draw in order: 1st v 2nd, 3rd v 4th", () => {
+    const draw = ["a", "b", "c", "d", "e", "f", "g", "h"];
+    expect(firstRound(draw)).toEqual(["a v b", "c v d", "e v f", "g v h"]);
+  });
+
+  it("reads top to bottom with byes spread through the bracket", () => {
+    const rows = firstRound(["a", "b", "c", "d", "e", "f"]);
+    expect(rows.join(", ")).toBe("a v bye, b v c, d v bye, e v f");
+  });
+
+  it("works for double elimination too", () => {
+    const specs = doubleElimination(drawToSeedOrder(["a", "b", "c", "d"]), { raceTo: 3 });
+    const w1 = specs.filter((m) => m.bracket === "WINNERS" && m.round === 1).sort((a, b) => a.position - b.position);
+    expect(w1.map((m) => [m.slot1, m.slot2].map((s) => (s.type === "entry" ? s.entryId : "?")).join(" v "))).toEqual(["a v b", "c v d"]);
   });
 });

@@ -5,7 +5,7 @@ import { entryNames, getTournamentFull, playerName } from "@/lib/queries";
 import { computeTimings, TIME_ZONE, type Timings } from "@/lib/timings";
 import { loadTimingsInput } from "@/lib/timings-data";
 import { matchLabels } from "@/lib/views";
-import { cx, EmptyState, PageSkeleton, panel, SectionTitle } from "@/components/ui";
+import { ButtonLink, cx, EmptyState, PageSkeleton, panel, SectionTitle } from "@/components/ui";
 
 export default function TimingsPage({ params }: PageProps<"/admin/tournaments/[id]/timings">) {
   return (
@@ -88,7 +88,7 @@ async function TimingsView({ params }: { params: PageProps<"/admin/tournaments/[
 
   return (
     <div className="space-y-8">
-      <Overview timings={timings} now={now} doubleElim={t.format === "DOUBLE_ELIM" && t.grandFinalReset} />
+      <Overview timings={timings} now={now} tournamentId={t.id} doubleElim={t.format === "DOUBLE_ELIM" && t.grandFinalReset} />
       <TablesSection timings={timings} />
       <PlayersSection timings={timings} people={people} />
       <MatchesSection timings={timings} names={names} labels={labels} tableName={new Map(tables.map((x) => [x.id, x.name]))} />
@@ -96,12 +96,20 @@ async function TimingsView({ params }: { params: PageProps<"/admin/tournaments/[
   );
 }
 
-function Overview({ timings, now, doubleElim }: { timings: Timings; now: Date; doubleElim: boolean }) {
+function Overview({ timings, now, doubleElim, tournamentId }: { timings: Timings; now: Date; doubleElim: boolean; tournamentId: string }) {
   const { overview: o, projection: p, baselineProjection: b, baselineMs } = timings;
   const late = p && b ? +p.finishAt - +b.finishAt : null;
   return (
     <section>
-      <SectionTitle>How it&apos;s running</SectionTitle>
+      <SectionTitle
+        action={
+          <ButtonLink href={`/report/${tournamentId}`} variant="secondary">
+            End-of-day report
+          </ButtonLink>
+        }
+      >
+        How it&apos;s running
+      </SectionTitle>
       <div className={cx(panel, "grid grid-cols-2 gap-px bg-border md:grid-cols-4")}>
         {o.lastEnd ? (
           <Stat label="Finished" value={clock(o.lastEnd)} sub={o.elapsedMs !== null ? `after ${hm(o.elapsedMs)}` : undefined} />

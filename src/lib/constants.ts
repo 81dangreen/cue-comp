@@ -54,3 +54,10 @@ export const isDish = (v: unknown): v is Dish => typeof v === "string" && v in D
 
 // Snooker and carom score frames/points differently, but "race to N frames" covers phase 1.
 export const frameWord = (discipline: string) => (discipline === "SNOOKER" ? "frames" : "racks");
+
+export const SEEDING = {
+  RANDOM: "Random draw",
+  MANUAL: "Manual seeds",
+  DRAWN: "Enter the draw yourself",
+} as const;
+export type Seeding = keyof typeof SEEDING;
