@@ -270,9 +270,10 @@ export function FrameScoreboard(props: FrameMatchProps) {
                         Breaking
                       </span>
                     )}
+                    {/* Tall and narrow on a phone, so a pair's names get up to four lines rather than being cut short. */}
                     <span className="flex max-w-full items-center gap-2">
                       <span className={cx("h-2.5 w-2.5 shrink-0 rounded-full sm:h-3 sm:w-3", SIDE[slot].dot)} />
-                      <span className="line-clamp-2 text-[clamp(1rem,min(6.5vw,4.5vh),2.25rem)] leading-tight font-bold break-words">
+                      <span className="line-clamp-4 text-center text-[clamp(1rem,min(6.5vw,4.5vh),2.25rem)] leading-tight font-bold break-words sm:line-clamp-2">
                         {sideLabel(slot)}
                       </span>
                     </span>
@@ -387,13 +388,18 @@ function TeamScore({
   const letter = (id: string) => (lineup ? (lineup[slot].A === id ? "A" : lineup[slot].B === id ? "B" : null) : null);
   const ordered = lineup ? [...members].sort((a, b) => (letter(a.id) ?? "").localeCompare(letter(b.id) ?? "")) : members;
   return (
-    <div className={cx("flex min-w-0 items-center gap-2 sm:gap-4", slot === 2 && "flex-row-reverse text-right")}>
-      <span className={cx("text-[clamp(2.25rem,9vh,6rem)] leading-none font-black tabular-nums", won && "text-emerald-300")}>{score}</span>
-      <div className="min-w-0">
-        <p className="flex items-center gap-2 text-sm leading-tight font-bold sm:text-xl lg:text-2xl">
+    // Name on the outside, score next to the "v": Name  3  v  2  Name.
+    <div className={cx("flex min-w-0 items-center gap-2 sm:gap-4", slot === 2 && "text-right")}>
+      <span
+        className={cx("text-[clamp(2rem,min(9vh,11vw),6rem)] leading-none font-black tabular-nums", slot === 1 && "order-last", won && "text-emerald-300")}
+      >
+        {score}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className={cx("flex items-center gap-2 text-sm leading-tight font-bold sm:text-xl lg:text-2xl", slot === 2 && "justify-end")}>
           <span className={cx("h-2.5 w-2.5 shrink-0 rounded-full", SIDE[slot].dot, slot === 2 && "order-last")} />
-          {/* Two lines on phones rather than cutting a pair's names short. */}
-          <span className="line-clamp-2 break-words sm:line-clamp-1">{team}</span>
+          {/* Up to three lines on phones rather than cutting a pair's names short. */}
+          <span className="line-clamp-3 break-words sm:line-clamp-1">{team}</span>
         </p>
         <p className="hidden truncate text-xs text-white/65 sm:block sm:text-sm">
           {ordered.map((m, i) => (

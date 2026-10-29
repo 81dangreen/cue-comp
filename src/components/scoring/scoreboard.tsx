@@ -133,7 +133,7 @@ export function Scoreboard(props: Props) {
         >
           <span className="flex max-w-full items-center gap-2">
             <span className={cx("h-2.5 w-2.5 shrink-0 rounded-full sm:h-3 sm:w-3", slot === 1 ? "bg-sky-300" : "bg-amber-300")} />
-            <span className="line-clamp-2 text-center text-[clamp(1rem,min(6.5vw,4.5vh),2.25rem)] leading-tight font-semibold break-words">
+            <span className="line-clamp-3 text-center text-[clamp(1rem,min(6.5vw,4.5vh),2.25rem)] leading-tight font-semibold break-words">
               {name(slot)}
             </span>
             {rank && <span className="rounded-md bg-white/15 px-1.5 py-0.5 text-xs font-bold text-white/85 sm:text-sm">R{rank}</span>}
