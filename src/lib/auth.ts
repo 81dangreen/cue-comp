@@ -22,14 +22,15 @@ export type CurrentUser = {
  * When multi-tenancy arrives, the active org will come from the URL or a switcher.
  */
 export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
-  const { userId } = await getSession();
+  const { userId, v } = await getSession();
   if (!userId) return null;
   const user = await db.user.findUnique({
     where: { id: userId },
     include: { memberships: { include: { organization: true }, orderBy: { id: "asc" }, take: 1 } },
   });
   const membership = user?.memberships[0];
-  if (!user || !membership) return null;
+  // A password change since this session began signs it out.
+  if (!user || !membership || (v ?? 0) !== user.sessionVersion) return null;
   return {
     id: user.id,
     name: user.name,

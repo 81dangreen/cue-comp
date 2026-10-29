@@ -22,17 +22,50 @@ model Organization {
   venues      Venue[]
   tournaments Tournament[]
   devices     Device[]
+  invites     Invite[]
 }
 
 model User {
-  id             String       @id @default(cuid())
-  email          String       @unique
+  id             String          @id @default(cuid())
+  email          String          @unique
   name           String
   passwordHash   String
   // Central admin of the shared player directory: edits players, contact details and ranks for everyone.
-  directoryAdmin Boolean      @default(false)
-  createdAt      DateTime     @default(now())
+  directoryAdmin Boolean         @default(false)
+  // Bumped when the password changes, which signs out every other session.
+  sessionVersion Int             @default(0)
+  createdAt      DateTime        @default(now())
   memberships    Membership[]
+  passwordResets PasswordReset[]
+}
+
+// A link that adds someone to an organisation with a role. Only the token's hash is stored.
+model Invite {
+  id             String       @id @default(cuid())
+  organizationId String
+  tokenHash      String       @unique
+  role           String // ADMIN | SCORER
+  // Who it's for, so pending invites can be told apart (optional).
+  label          String?
+  createdById    String?
+  expiresAt      DateTime
+  usedAt         DateTime?
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+}
+
+// A one-time link to set a new password, created by an organiser for a team member.
+model PasswordReset {
+  id          String    @id @default(cuid())
+  userId      String
+  tokenHash   String    @unique
+  createdById String?
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Membership {

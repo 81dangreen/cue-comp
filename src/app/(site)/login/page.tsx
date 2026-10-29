@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Suspense } from "react";
 import { loginAction } from "@/actions/auth";
 import { ActionForm, SubmitButton } from "@/components/forms";
@@ -24,11 +25,19 @@ export default function LoginPage({ searchParams }: PageProps<"/login">) {
           Log in
         </SubmitButton>
       </ActionForm>
+      <Link href="/forgot" className="mt-4 inline-block text-sm text-accent hover:underline">
+        Forgot your password?
+      </Link>
     </Card>
   );
 }
 
 async function NextField({ searchParams }: { searchParams: PageProps<"/login">["searchParams"] }) {
-  const { next } = await searchParams;
-  return typeof next === "string" ? <input type="hidden" name="next" value={next} /> : null;
+  const { next, reset } = await searchParams;
+  return (
+    <>
+      {reset && <p className="rounded-lg bg-accent-soft px-3 py-2 text-sm text-accent">Password reset. Log in with your new password.</p>}
+      {typeof next === "string" && <input type="hidden" name="next" value={next} />}
+    </>
+  );
 }

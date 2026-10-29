@@ -3,7 +3,8 @@ import { cookies, headers } from "next/headers";
 import { connection } from "next/server";
 import { sealData, unsealData } from "iron-session";
 
-export type SessionData = { userId?: string };
+/** `v` is the user's session version when they signed in; a password change bumps it, ending older sessions. */
+export type SessionData = { userId?: string; v?: number };
 
 export const SESSION_COOKIE = "cs_session";
 const TTL_SECONDS = 60 * 60 * 24 * 30;

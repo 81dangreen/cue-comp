@@ -46,7 +46,7 @@ export async function setupAction(_prev: ActionResult, formData: FormData): Prom
       },
     },
   });
-  await setSession({ userId: user.id });
+  await setSession({ userId: user.id, v: user.sessionVersion });
   redirect("/admin");
 }
 
@@ -66,7 +66,7 @@ export async function loginAction(_prev: ActionResult, formData: FormData): Prom
   // Compare against a dummy hash when the user doesn't exist to keep timing similar.
   const ok = await bcrypt.compare(parsed.data.password, user?.passwordHash ?? DUMMY_HASH);
   if (!user || !ok) return { error: "Incorrect email or password" };
-  await setSession({ userId: user.id });
+  await setSession({ userId: user.id, v: user.sessionVersion });
   const next = formData.get("next");
   redirect(typeof next === "string" && next.startsWith("/") && !next.startsWith("//") ? next : "/admin");
 }

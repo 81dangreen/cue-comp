@@ -67,6 +67,18 @@ history follow them everywhere.
 - **Contact details** on the directory record are visible to directory admins only. Details a player gives when
   self-registering are stored on that entry, for that comp's organisers.
 
+## Team: invites and passwords
+
+Everything works by **shareable links**; no email service is needed. Links are single-use and only their hash is stored.
+
+- **Invite** (Admin → Team): pick a role, create a link, send it by WhatsApp or text. The person sets their name and
+  password and joins. Roles: **Owner** (everything, including roles), **Admin** (runs tournaments), **Scorer**
+  (scores matches only). Invites expire after 7 days and can be cancelled while pending.
+- **Password reset**: the owner (anyone) or an admin (scorers) creates a reset link for a team member; it expires
+  after 24 hours. Everyone can change their own password under **Account**.
+- **Locked out**: `/forgot` resets any account with the server's `SETUP_KEY`.
+- Changing or resetting a password signs that person out on every other device (`User.sessionVersion`).
+
 ## Handicaps
 
 Players have a **rank per discipline** (1 = strongest), set on the player's page or for everyone at once under
