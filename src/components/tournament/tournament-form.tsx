@@ -62,6 +62,7 @@ export type TournamentDefaults = {
   plateQualifiers?: number | null;
   tablePerGroup?: boolean;
   frameMinutes?: number;
+  showStartTimes?: boolean;
 };
 
 export function TournamentForm({
@@ -243,6 +244,10 @@ export function TournamentForm({
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" name="isPublic" defaultChecked={defaults.isPublic ?? true} />
           Show on the public site
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" name="showStartTimes" defaultChecked={defaults.showStartTimes ?? true} />
+          Show estimated start times in the order of play
         </label>
       </div>
       <HandicapFields

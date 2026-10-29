@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { connection } from "next/server";
 import { Suspense } from "react";
 import { registerForTournament } from "@/actions/tournaments";
 import { entryNames, getTournamentFull } from "@/lib/queries";
+import { estimatedStarts } from "@/lib/timings";
+import { loadTimingsInput } from "@/lib/timings-data";
 import { ordinal } from "@/lib/results";
 import { matchLabels, orderOfPlay, placings } from "@/lib/views";
 import { ActionForm, SubmitButton } from "@/components/forms";
@@ -31,6 +34,10 @@ async function Overview({ params }: { params: PageProps<"/t/[slug]">["params"] }
   const names = entryNames(t.entries);
   const labels = matchLabels(t.matches, t.groups);
   const order = orderOfPlay(t);
+  // Estimated start times for what's coming up (worked out at request time, as they depend on the clock).
+  await connection();
+  const now = new Date();
+  const starts = t.showStartTimes && (order.tables.length || order.queue.length) ? estimatedStarts(await loadTimingsInput(t, now)) : undefined;
   // Matches on a group's own table appear in that table's running order instead.
   const onGroupTables = new Set(order.tables.flatMap((g) => g.matches.map((m) => m.id)));
   const live = t.matches.filter((m) => m.status === "LIVE" && !onGroupTables.has(m.id));
@@ -68,7 +75,14 @@ async function Overview({ params }: { params: PageProps<"/t/[slug]">["params"] }
         {(order.tables.length > 0 || order.queue.length > 0) && (
           <section>
             <SectionTitle>Order of play</SectionTitle>
-            <OrderOfPlay order={order} names={names} labels={labels} hrefFor={(m) => `/t/${t.slug}/matches/${m.id}`} />
+            <OrderOfPlay
+              order={order}
+              names={names}
+              labels={labels}
+              hrefFor={(m) => `/t/${t.slug}/matches/${m.id}`}
+              starts={starts}
+              now={now}
+            />
           </section>
         )}
 

@@ -84,6 +84,7 @@ function structureSettings(fields: Record<string, string>, entryType: string) {
     plateQualifiers: plate || null,
     tablePerGroup: fields.tablePerGroup === "on",
     frameMinutes: frameMinutes(fields.frameMinutes),
+    showStartTimes: fields.showStartTimes === "on",
     // A frame-list match is won by a majority of its frames.
     ...(frames.length ? { raceTo: majority(frames.length), raceToFinal: undefined } : {}),
   };

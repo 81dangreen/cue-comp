@@ -134,7 +134,11 @@ Frame times come from when each frame is scored (the first from the match start)
 as scoring slips; walkovers and results entered without frames aren't timed. The projection plays out the remaining
 matches on the venue's tables in bracket order, at a pace that starts at the baseline and moves to the comp's real
 average as frames come in. It includes a not-yet-drawn knockout (estimated from the qualifier numbers) and leaves out a
-grand final reset until it's needed. Logic in `src/lib/timings.ts`.
+grand final reset until it's needed. Once matches are on tables it plans on the tables the comp is using; before
+that, on all the venue's tables. Logic in `src/lib/timings.ts`.
+
+The same projection gives each upcoming match an **estimated start** on the public order of play ("about 14:40",
+"Due now"), rounded to 5 minutes. Organisers can turn this off in the settings ("Show estimated start times").
 
 ## Deploying (Render)
 

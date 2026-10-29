@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { MatchWithTable } from "@/lib/queries";
+import { TIME_ZONE } from "@/lib/timings";
 import type { orderOfPlay } from "@/lib/views";
 import { cx, panel } from "../ui";
 
@@ -8,9 +9,50 @@ type Props = {
   names: Map<string, string>;
   labels: Map<string, string>;
   hrefFor: (m: MatchWithTable) => string;
+  /** Estimated start per match (empty when the organiser turns them off or there's nothing to go on). */
+  starts?: Map<string, Date>;
+  now?: Date;
 };
 
 const QUEUE_LIMIT = 12;
+const FIVE_MIN = 5 * 60_000;
+
+/** An estimated start, to the nearest 5 minutes: "Due now", "14:40", or "Sat 10:05" if it isn't today. */
+function startText(at: Date, now: Date) {
+  if (+at - +now <= FIVE_MIN) return "Due now";
+  const rounded = new Date(Math.round(+at / FIVE_MIN) * FIVE_MIN);
+  const time = rounded.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: TIME_ZONE });
+  const day = (d: Date) => d.toLocaleDateString("en-GB", { timeZone: TIME_ZONE });
+  return day(rounded) === day(now) ? time : `${rounded.toLocaleDateString("en-GB", { weekday: "short", timeZone: TIME_ZONE })} ${time}`;
+}
+
+/** Under the table in the queue: "about 14:40" (stacked on phones), or "Due now". */
+function QueueStart({ text }: { text: string }) {
+  return (
+    <span className="block text-xs leading-tight text-muted" title="Estimated start">
+      {text === "Due now" ? (
+        text
+      ) : (
+        <>
+          about <br className="sm:hidden" />
+          <span className="font-semibold text-foreground sm:font-normal sm:text-muted">{text}</span>
+        </>
+      )}
+    </span>
+  );
+}
+
+/** "about 14:40" stacked small, for the end of a running-order row. */
+function EstimatedStart({ at, now }: { at?: Date; now: Date }) {
+  if (!at) return null;
+  const text = startText(at, now);
+  return (
+    <span className="text-right leading-tight whitespace-nowrap" title="Estimated start">
+      {text !== "Due now" && <span className="block text-[11px] text-muted">about</span>}
+      <span className="block text-sm font-semibold tabular-nums">{text}</span>
+    </span>
+  );
+}
 
 /**
  * A fixture: first pair right-aligned, the score (or "v") in a fixed middle column, second pair
@@ -99,8 +141,9 @@ function SideName({ name = "" }: { name?: string }) {
  * Upcoming matches as plain running orders, so players can see when they're on: one list per
  * table for groups with their own table, and a numbered queue for everything else.
  */
-export function OrderOfPlay({ order, names, labels, hrefFor }: Props) {
+export function OrderOfPlay({ order, names, labels, hrefFor, starts = new Map(), now = new Date(0) }: Props) {
   const { tables, queue } = order;
+  const estimating = [...tables.flatMap((x) => x.matches), ...queue].some((m) => starts.has(m.id));
   return (
     <div className="space-y-4">
       {tables.length > 0 && (
@@ -123,7 +166,10 @@ export function OrderOfPlay({ order, names, labels, hrefFor }: Props) {
                         <Link
                           href={hrefFor(m)}
                           className={cx(
-                            "grid grid-cols-[3rem_minmax(0,1fr)] items-center gap-2 px-3 py-3 text-base hover:bg-surface-2 sm:grid-cols-[3.5rem_minmax(0,1fr)] sm:gap-3 sm:px-4",
+                            "grid items-center gap-2 px-3 py-3 text-base hover:bg-surface-2 sm:gap-3 sm:px-4",
+                            estimating
+                              ? "grid-cols-[3rem_minmax(0,1fr)_auto] sm:grid-cols-[3.5rem_minmax(0,1fr)_4.5rem]"
+                              : "grid-cols-[3rem_minmax(0,1fr)] sm:grid-cols-[3.5rem_minmax(0,1fr)]",
                             live && "bg-live/5",
                             next && "bg-pop/10",
                           )}
@@ -137,6 +183,7 @@ export function OrderOfPlay({ order, names, labels, hrefFor }: Props) {
                             {live ? "Now" : next ? "Next" : `${i + 1}`}
                           </span>
                           <Fixture m={m} names={names} />
+                          {estimating && (live ? <span /> : <EstimatedStart at={starts.get(m.id)} now={now} />)}
                         </Link>
                       </li>
                     );
@@ -171,12 +218,14 @@ export function OrderOfPlay({ order, names, labels, hrefFor }: Props) {
                     <span className="block text-center text-xs text-muted sm:hidden">{labels.get(m.id)}</span>
                   </td>
                   <td className="hidden px-2 py-2.5 text-sm text-muted sm:table-cell">{labels.get(m.id)}</td>
-                  <td className="px-4 py-2.5 text-right text-sm whitespace-nowrap">
+                  <td className="py-2.5 pr-3 pl-2 text-right text-sm whitespace-nowrap sm:px-4">
                     {m.table ? (
                       <span className="font-semibold">{m.table.name}</span>
                     ) : (
-                      <span className="text-muted">Awaiting table</span>
+                      // On phones the estimate says enough; "Awaiting table" would squeeze the names.
+                      <span className={cx("text-muted", starts.has(m.id) && "hidden sm:inline")}>Awaiting table</span>
                     )}
+                    {starts.has(m.id) && <QueueStart text={startText(starts.get(m.id)!, now)} />}
                   </td>
                 </tr>
               ))}
@@ -186,6 +235,9 @@ export function OrderOfPlay({ order, names, labels, hrefFor }: Props) {
             <p className="border-t border-border px-4 py-2 text-sm text-muted">+{queue.length - QUEUE_LIMIT} more after these</p>
           )}
         </div>
+      )}
+      {estimating && (
+        <p className="text-xs text-muted">Start times are estimates from how the day is running, and will move as matches finish.</p>
       )}
     </div>
   );

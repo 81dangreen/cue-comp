@@ -1,9 +1,9 @@
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { requireUser } from "@/lib/auth";
-import { db } from "@/lib/db";
 import { entryNames, getTournamentFull, playerName } from "@/lib/queries";
 import { computeTimings, TIME_ZONE, type Timings } from "@/lib/timings";
+import { loadTimingsInput } from "@/lib/timings-data";
 import { matchLabels } from "@/lib/views";
 import { cx, EmptyState, PageSkeleton, panel, SectionTitle } from "@/components/ui";
 
@@ -69,36 +69,10 @@ async function TimingsView({ params }: { params: PageProps<"/admin/tournaments/[
   const t = await getTournamentFull({ id });
   if (!t || t.organizationId !== user.organizationId) notFound();
 
-  const [frames, venueTables] = await Promise.all([
-    db.frame.findMany({
-      where: { match: { tournamentId: t.id } },
-      select: { matchId: true, number: true, player1Id: true, player2Id: true, createdAt: true },
-    }),
-    t.venueId ? db.table.findMany({ where: { venueId: t.venueId }, orderBy: { sortOrder: "asc" }, select: { id: true, name: true } }) : [],
-  ]);
   const now = new Date();
-  const framesOf = Map.groupBy(frames, (f) => f.matchId);
-  // The venue's tables, plus any other table a match was played on.
-  const tables = [...venueTables];
-  for (const m of t.matches) if (m.table && !tables.some((x) => x.id === m.table!.id)) tables.push({ id: m.table.id, name: m.table.name });
-
-  const timings = computeTimings({
-    now,
-    startsAt: t.startsAt,
-    frameMinutes: t.frameMinutes,
-    format: t.format,
-    raceTo: t.raceTo,
-    raceToFinal: t.raceToFinal,
-    matchFrames: t.matchFrames,
-    groupFinish: t.groupFinish,
-    koFinish: t.koFinish,
-    qualifiersPerGroup: t.qualifiersPerGroup,
-    plateQualifiers: t.plateQualifiers,
-    tables,
-    groups: t.groups,
-    entries: t.entries,
-    matches: t.matches.map((m) => ({ ...m, frames: framesOf.get(m.id) ?? [] })),
-  });
+  const input = await loadTimingsInput(t, now);
+  const tables = input.tables;
+  const timings = computeTimings(input);
 
   const names = entryNames(t.entries);
   const people = new Map(t.entries.flatMap((e) => (e.partner ? [e.player, e.partner] : [e.player])).map((p) => [p.id, playerName(p)]));
@@ -160,7 +134,8 @@ function Overview({ timings, now, doubleElim }: { timings: Timings; now: Date; d
       </div>
       {p && (
         <p className="mt-2 text-xs text-muted">
-          The projection plays out the matches left on {p.tables} table{p.tables === 1 ? "" : "s"}, in bracket order, at{" "}
+          The projection plays out the matches left on {p.tables} table{p.tables === 1 ? "" : "s"} (the ones this comp is using, or all the
+          venue&apos;s before any are assigned), in bracket order, at{" "}
           {mmss(o.paceMs)} a frame: the comp&apos;s average so far, eased in from the {mmss(baselineMs)} baseline.
           {p.estimatedKnockout && " The knockout stage isn't drawn yet, so it's estimated from the qualifier numbers."}
           {doubleElim && " A grand final reset isn't included until it's needed."}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeTimings, frameDurations, projectFinish, type TimedMatch, type TimingsInput } from "./timings";
+import { computeTimings, estimatedStarts, frameDurations, projectFinish, type TimedMatch, type TimingsInput } from "./timings";
 
 const T0 = new Date("2026-11-14T10:00:00Z");
 const at = (min: number) => new Date(+T0 + min * 60_000);
@@ -180,5 +180,22 @@ describe("projectFinish", () => {
   it("leaves out a grand final reset that may not be needed", () => {
     const p = projectFinish(input({ now: at(0), matches: [match({ id: "gf", bracket: "FINAL" }), match({ id: "r", bracket: "FINAL", round: 2 })] }), 10 * MIN, 0)!;
     expect(p.matchesLeft).toBe(1);
+  });
+});
+
+describe("estimatedStarts", () => {
+  it("gives each match still to play a start: the final after both semis", () => {
+    const semi1 = match({ id: "s1", winnerToId: "f", status: "READY", tableId: "t1", calledAt: at(-1) });
+    const semi2 = match({ id: "s2", position: 2, winnerToId: "f", status: "READY" });
+    const final = match({ id: "f", round: 2 });
+    const live = match({ id: "l", status: "LIVE", startedAt: at(-20), tableId: "t2", frames: frames(-10) });
+    const starts = estimatedStarts(input({ now: at(0), tables: [{ id: "t1", name: "1" }, { id: "t2", name: "2" }], matches: [live, semi1, semi2, final] }));
+    expect(starts.has("l")).toBe(false); // already under way
+    expect(+starts.get("s1")!).toBeLessThan(+starts.get("s2")!); // on its table already; s2 waits for the live match
+    expect(+starts.get("f")!).toBeGreaterThan(+starts.get("s2")!);
+  });
+
+  it("has nothing to say before anything is played or a start time is set", () => {
+    expect(estimatedStarts(input({ now: at(0), matches: [match({ id: "a", status: "READY" })] })).size).toBe(0);
   });
 });

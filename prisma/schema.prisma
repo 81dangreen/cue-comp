@@ -177,6 +177,8 @@ model Tournament {
   tablePerGroup      Boolean      @default(false)
   // Expected minutes per frame: the baseline the timings page measures the comp against.
   frameMinutes       Int          @default(15)
+  // Show each upcoming match's estimated start time on the public order of play.
+  showStartTimes     Boolean      @default(true)
   createdAt          DateTime     @default(now())
   organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   venue              Venue?       @relation(fields: [venueId], references: [id], onDelete: SetNull)

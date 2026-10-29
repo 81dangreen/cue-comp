@@ -167,9 +167,7 @@ export function computeTimings(input: TimingsInput) {
   const finished = matches.length > 0 && matches.every(isDone);
   const lastEnd = finished ? new Date(Math.max(...matches.flatMap((m) => (m.completedAt ? [+m.completedAt] : [0])))) : null;
 
-  // The pace used for what's left: the baseline, eased towards the comp's real frame time as frames come in.
-  const paceMs = (BASELINE_WEIGHT * baselineMs + actualTotal) / (BASELINE_WEIGHT + allFrameMs.length);
-  const changeoverMs = waits.length >= 3 ? average(waits)! : DEFAULT_CHANGEOVER_MS;
+  const { paceMs, changeoverMs } = projectionPace(input);
   const projection = finished ? null : projectFinish(input, paceMs, changeoverMs);
   const baselineProjection = finished ? null : projectFinish(input, baselineMs, changeoverMs);
 
@@ -199,6 +197,37 @@ export function computeTimings(input: TimingsInput) {
 
 export type Timings = ReturnType<typeof computeTimings>;
 
+/**
+ * The pace used for what's left: the baseline, eased towards the comp's real frame time as frames
+ * come in, and the changeover between matches (how long players have been taking to start).
+ */
+export function projectionPace(input: TimingsInput) {
+  const baselineMs = input.frameMinutes * 60_000;
+  const frameMs = input.matches
+    .filter((m) => !m.walkover && !m.isBye && m.status !== "VOID")
+    .flatMap((m) => frameDurations(m).flatMap((f) => (f.ms === null ? [] : [f.ms])));
+  const waits = input.matches.flatMap((m) => {
+    const w = waitToStart(m);
+    return w === null ? [] : [w];
+  });
+  return {
+    paceMs: (BASELINE_WEIGHT * baselineMs + sum(frameMs)) / (BASELINE_WEIGHT + frameMs.length),
+    changeoverMs: waits.length >= 3 ? average(waits)! : DEFAULT_CHANGEOVER_MS,
+  };
+}
+
+/**
+ * When each match still to play is expected to start (and on which table), for players watching
+ * the order of play. Empty before there's anything to go on: nothing played and no start time set.
+ */
+export function estimatedStarts(input: TimingsInput) {
+  const started = input.matches.some((m) => m.startedAt);
+  if (!started && !input.startsAt) return new Map<string, Date>();
+  const { paceMs, changeoverMs } = projectionPace(input);
+  const p = projectFinish(input, paceMs, changeoverMs);
+  return new Map([...(p?.starts ?? [])].map(([id, s]) => [id, s.at]));
+}
+
 // ---------------------------------------------------------------------------------------------
 // Projected finish
 
@@ -214,6 +243,8 @@ type Task = {
   live?: boolean;
   /** Already sent to its table at this time (the changeover started then). */
   calledAt?: number;
+  /** An estimated knockout match that hasn't been drawn yet. */
+  virtual?: boolean;
 };
 
 /** Typical frames a match takes: this comp's average for similar matches, else an estimate from its format. */
@@ -294,7 +325,7 @@ function remainingTasks(input: TimingsInput): { tasks: Task[]; estimatedKnockout
         const raceTo = last && b.key === "ko" && input.raceToFinal ? input.raceToFinal : input.raceTo;
         const ids = Array.from({ length: count }, (_, i) => `${b.key}-${r}-${i}`);
         for (const [i, id] of ids.entries()) {
-          tasks.push({ id, order: [1, r + 1, i], deps: previous, frames: expectedFrames(input, true, raceTo), tableId: null });
+          tasks.push({ id, order: [1, r + 1, i], deps: previous, frames: expectedFrames(input, true, raceTo), tableId: null, virtual: true });
         }
         if (ids.length) previous = ids;
       });
@@ -317,6 +348,7 @@ export function projectFinish(input: TimingsInput, frameMs: number, changeoverMs
   const tableIds = input.tables.length ? input.tables.map((t) => t.id) : ["_"];
   const free = new Map(tableIds.map((id) => [id, from]));
   const end = new Map<string, number>();
+  const starts = new Map<string, { at: Date; tableId: string | null }>();
   const groupTables = new Set(input.groups.flatMap((g) => (g.tableId ? [g.tableId] : [])));
 
   // Matches already on a table hold it first.
@@ -365,6 +397,7 @@ export function projectFinish(input: TimingsInput, frameMs: number, changeoverMs
     const finish = start + task.frames * frameMs;
     free.set(table, finish);
     end.set(task.id, finish);
+    if (!task.virtual) starts.set(task.id, { at: new Date(start), tableId: input.tables.length ? table : null });
   }
 
   return {
@@ -373,5 +406,6 @@ export function projectFinish(input: TimingsInput, frameMs: number, changeoverMs
     framesLeft: Math.round(sum(tasks.map((t) => t.frames))),
     estimatedKnockout,
     tables: tableIds.length,
+    starts,
   };
 }
