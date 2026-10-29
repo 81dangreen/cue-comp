@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { db } from "@/lib/db";
 import { entryName, playerName } from "@/lib/queries";
 import { DISCIPLINES, type Discipline } from "@/lib/constants";
-import { Badge, Card, CardHeader, EmptyState, PageSkeleton } from "@/components/ui";
+import { Badge, Card, CardHeader, cx, EmptyState, PageSkeleton, panel } from "@/components/ui";
 
 export default function PlayerPage({ params }: PageProps<"/players/[id]">) {
   return (
@@ -16,10 +16,10 @@ export default function PlayerPage({ params }: PageProps<"/players/[id]">) {
 
 function Stat({ label, value }: { label: string; value: string | number }) {
   return (
-    <Card className="p-4">
+    <div className="bg-surface p-4">
       <div className="text-xs text-muted">{label}</div>
-      <div className="mt-1 text-2xl font-bold tabular-nums">{value}</div>
-    </Card>
+      <div className="mt-1 font-display text-3xl font-bold tabular-nums">{value}</div>
+    </div>
   );
 }
 
@@ -88,7 +88,8 @@ async function Player({ params }: { params: PageProps<"/players/[id]">["params"]
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      {/* One strip split into cells (hairline gaps show the border colour). */}
+      <div className={cx(panel, "grid grid-cols-2 gap-px bg-border md:grid-cols-4")}>
         <Stat label="Tournaments" value={entries.length} />
         <Stat label="Matches" value={drawn ? `${won}–${drawn}–${matches.length - won - drawn}` : `${won}–${matches.length - won}`} />
         <Stat label="Win rate" value={`${winPct}%`} />

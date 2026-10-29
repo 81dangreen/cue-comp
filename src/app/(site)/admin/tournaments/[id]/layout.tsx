@@ -27,32 +27,37 @@ async function Header({ params }: { params: LayoutProps<"/admin/tournaments/[id]
   const base = `/admin/tournaments/${t.id}`;
 
   return (
-    <div>
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{t.name}</h1>
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <Badge tone={t.status === "IN_PROGRESS" ? "accent" : "neutral"}>{TOURNAMENT_STATUS[t.status as TournamentStatus]}</Badge>
-            <Badge>{FORMATS[t.format as Format]}</Badge>
-            {t.entryType === "PAIRS" && <Badge>Pairs</Badge>}
-            <Badge>{formatSummary(t)}</Badge>
-            {t.registrationOpen && <Badge tone="accent">Registration open</Badge>}
-            <LiveRefresher tournamentId={t.id} />
+    // Full-width bands like the public page: the tournament in a felt header, then its tabs.
+    <div className="-mt-6">
+      <div className="bg-felt full-bleed">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-start justify-between gap-4 px-4 py-5 sm:py-6">
+          <div className="min-w-0">
+            <h1 className="font-display text-3xl leading-none font-bold tracking-tight sm:text-4xl">{t.name}</h1>
+            <div className="mt-3 flex flex-wrap items-center gap-1.5">
+              <Badge tone={t.status === "IN_PROGRESS" ? "pop" : "neutral"}>{TOURNAMENT_STATUS[t.status as TournamentStatus]}</Badge>
+              <Badge>{FORMATS[t.format as Format]}</Badge>
+              {t.entryType === "PAIRS" && <Badge>Pairs</Badge>}
+              <Badge>{formatSummary(t)}</Badge>
+              {t.registrationOpen && <Badge tone="pop">Registration open</Badge>}
+              <LiveRefresher tournamentId={t.id} onDark />
+            </div>
           </div>
+          <ButtonLink href={`/t/${t.slug}`} variant="secondary" target="_blank">
+            Public page ↗
+          </ButtonLink>
         </div>
-        <ButtonLink href={`/t/${t.slug}`} variant="secondary" target="_blank">
-          Public page ↗
-        </ButtonLink>
       </div>
-      <div className="mt-5">
-        <TabNav
-          tabs={[
-            { href: base, label: "Control room" },
-            { href: `${base}/entries`, label: `${t.entryType === "PAIRS" ? "Pairs" : "Entries"} (${t.entries.length})` },
-            ...(t.matches.length ? [{ href: `${base}/bracket`, label: "Bracket" }] : []),
-            { href: `${base}/settings`, label: "Settings" },
-          ]}
-        />
+      <div className="full-bleed border-b border-border bg-surface">
+        <div className="mx-auto max-w-7xl px-4 [&_nav]:border-b-0">
+          <TabNav
+            tabs={[
+              { href: base, label: "Control room" },
+              { href: `${base}/entries`, label: `${t.entryType === "PAIRS" ? "Pairs" : "Entries"} (${t.entries.length})` },
+              ...(t.matches.length ? [{ href: `${base}/bracket`, label: "Bracket" }] : []),
+              { href: `${base}/settings`, label: "Settings" },
+            ]}
+          />
+        </div>
       </div>
     </div>
   );

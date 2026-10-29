@@ -34,8 +34,13 @@ export function ButtonLink({
  */
 export const panel = "-mx-4 overflow-hidden border-y border-border bg-surface sm:mx-0 sm:border-x";
 
+/**
+ * A flat section (see `panel`). Centred cards (forms like log in, with `mx-auto`) keep a full
+ * border instead of running to the screen edges.
+ */
 export function Card({ className, ...props }: ComponentProps<"div">) {
-  return <div className={cx("rounded-xl border border-border bg-surface shadow-sm", className)} {...props} />;
+  const centred = className?.split(/\s+/).includes("mx-auto");
+  return <div className={cx(centred ? "border border-border bg-surface" : panel, className)} {...props} />;
 }
 
 export function CardHeader({ title, action, subtitle }: { title: ReactNode; subtitle?: ReactNode; action?: ReactNode }) {
