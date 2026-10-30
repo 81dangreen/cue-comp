@@ -155,6 +155,15 @@ Save, then **Generate this draw**. Knockouts store each entry's line as
 its draw number; groups store the group and place, which sets the order of the group's fixtures. Logic in
 `src/lib/manual-draw.ts` and `drawToSeedOrder` in `src/lib/bracket.ts`.
 
+## Sharing a venue between comps
+
+Two comps can run at one venue at once, e.g. a main comp and a plate. In the control room's **Tables** card,
+**Choose this comp's tables** ticks which of the venue's tables the comp plays on (all of them by default), and can be
+changed at any point. To start a plate at the quarter-finals on a 4-table venue, untick Tables 3 and 4 on the main comp
+and tick only those on the plate. A match already on a table finishes there; after that the table is the other comp's.
+The table dropdowns, auto-pilot, a table per group and the projected finish use only the comp's tables. A table busy
+with the other comp shows that comp's name.
+
 ## Deploying (Render)
 
 The app runs as **one always-on Node server plus Postgres**. Live updates are passed around inside the server process,

@@ -155,6 +155,15 @@ describe("projectFinish", () => {
     expect(+one.finishAt).toBeGreaterThan(+two.finishAt);
   });
 
+  it("plans only on the tables picked for the comp, once some are handed to another", () => {
+    const tables = [{ id: "t1", name: "1" }, { id: "t2", name: "2" }];
+    const two = projectFinish(input({ now: at(0), tables, matches: [semi1, semi2, final] }), 10 * MIN, 0)!;
+    const one = projectFinish(input({ now: at(0), tables, planTables: ["t2"], matches: [semi1, semi2, final] }), 10 * MIN, 0)!;
+    expect(one.tables).toBe(1);
+    expect(+one.finishAt).toBeGreaterThan(+two.finishAt);
+    expect([...one.starts.values()].every((s) => s.tableId === "t2")).toBe(true);
+  });
+
   it("lets a live match finish first, needing at least what the leader still needs", () => {
     const live = match({ id: "l", status: "LIVE", tableId: "t1", startedAt: at(0), score1: 2, score2: 2, frames: frames(10, 20, 30, 40) });
     const p = projectFinish(input({ now: at(40), matches: [live] }), 10 * MIN, 0)!;

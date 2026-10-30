@@ -1,4 +1,5 @@
 import "server-only";
+import { compTables } from "./comp-tables";
 import { db } from "./db";
 import type { TournamentFull } from "./queries";
 import type { TimingsInput } from "./timings";
@@ -13,8 +14,14 @@ export async function loadTimingsInput(t: TournamentFull, now: Date): Promise<Ti
   // Once matches have been sent to tables, plan on the tables this comp is using (a venue may have
   // more than the organiser uses); before that, on all the venue's tables.
   const used = new Set([...t.matches.flatMap((m) => (m.tableId ? [m.tableId] : [])), ...t.groups.flatMap((g) => (g.tableId ? [g.tableId] : []))]);
+  // Tables picked for the comp (e.g. two handed to a plate) are the only ones planned on from now.
   const venueTables = (t.venue?.tables ?? []).map((x) => ({ id: x.id, name: x.name }));
-  const tables = used.size ? venueTables.filter((x) => used.has(x.id)) : venueTables;
+  const picked = t.tableIds.length ? compTables(venueTables, t.tableIds) : null;
+  const tables = picked
+    ? venueTables.filter((x) => used.has(x.id) || picked.includes(x))
+    : used.size
+      ? venueTables.filter((x) => used.has(x.id))
+      : venueTables;
   for (const m of t.matches) if (m.table && !tables.some((x) => x.id === m.table!.id)) tables.push({ id: m.table.id, name: m.table.name });
   return {
     now,
@@ -29,6 +36,7 @@ export async function loadTimingsInput(t: TournamentFull, now: Date): Promise<Ti
     qualifiersPerGroup: t.qualifiersPerGroup,
     plateQualifiers: t.plateQualifiers,
     tables,
+    planTables: picked?.map((x) => x.id),
     groups: t.groups,
     entries: t.entries,
     matches: t.matches.map((m) => ({ ...m, frames: framesOf.get(m.id) ?? [] })),

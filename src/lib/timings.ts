@@ -53,6 +53,8 @@ export type TimingsInput = {
   plateQualifiers: number | null;
   /** The venue's tables, in order. */
   tables: { id: string; name: string }[];
+  /** The tables still to plan on, when the comp has been given only some of them (default: all `tables`). */
+  planTables?: string[];
   groups: { id: string; tableId: string | null }[];
   entries: { id: string; playerId: string; partnerId: string | null }[];
   matches: TimedMatch[];
@@ -345,7 +347,8 @@ export function projectFinish(input: TimingsInput, frameMs: number, changeoverMs
   const { tasks, estimatedKnockout } = remainingTasks(input);
   if (!tasks.length) return null;
 
-  const tableIds = input.tables.length ? input.tables.map((t) => t.id) : ["_"];
+  const planned = input.planTables?.length ? input.planTables : input.tables.map((t) => t.id);
+  const tableIds = planned.length ? planned : ["_"];
   const free = new Map(tableIds.map((id) => [id, from]));
   const end = new Map<string, number>();
   const starts = new Map<string, { at: Date; tableId: string | null }>();

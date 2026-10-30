@@ -5,6 +5,7 @@ import {
   autoAssignTablesAction,
   chooseDrawAction,
   setAutoPilotAction,
+  setCompTablesAction,
   generateKnockoutAction,
   resetDrawAction,
   setGroupTableAction,
@@ -15,6 +16,7 @@ import { assignTableAction } from "@/actions/matches";
 import { fullScore } from "@/lib/tournament-service";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { compTables } from "@/lib/comp-tables";
 import { manualDrawProblems } from "@/lib/manual-draw";
 import { ordinal } from "@/lib/results";
 import { entryNames, getTournamentFull, type MatchWithTable } from "@/lib/queries";
@@ -69,10 +71,17 @@ async function ControlRoom({ params }: { params: PageProps<"/admin/tournaments/[
   // Tables in use anywhere in the organisation, so two events at one venue don't clash.
   const busy = await db.match.findMany({
     where: { tableId: { not: null }, status: { in: ["READY", "LIVE"] }, tournament: { organizationId: user.organizationId } },
-    select: { tableId: true },
+    select: { tableId: true, tournamentId: true, tournament: { select: { name: true } } },
   });
   const busyIds = new Set(busy.map((b) => b.tableId));
-  const tables = (t.venue?.tables ?? []).map((tb) => ({ id: tb.id, name: tb.name, busy: busyIds.has(tb.id) }));
+  const otherEvent = new Map(busy.filter((b) => b.tournamentId !== t.id).map((b) => [b.tableId!, b.tournament.name]));
+  // The tables picked for this comp (all of them unless some went to another comp, e.g. a plate),
+  // plus any it still has a match on: those finish where they are.
+  const venueTables = t.venue?.tables ?? [];
+  const ownIds = new Set(compTables(venueTables, t.tableIds).map((tb) => tb.id));
+  const onTable = (tb: { id: string }) => t.matches.some((m) => m.tableId === tb.id && (m.status === "LIVE" || m.status === "READY"));
+  const shownTables = venueTables.filter((tb) => ownIds.has(tb.id) || onTable(tb));
+  const tables = shownTables.map((tb) => ({ id: tb.id, name: tb.name, busy: busyIds.has(tb.id) }));
 
   const live = t.matches.filter((m) => m.status === "LIVE");
   const ready = t.matches.filter((m) => m.status === "READY");
@@ -95,6 +104,64 @@ async function ControlRoom({ params }: { params: PageProps<"/admin/tournaments/[
         fullScore={`${fullScore(m, t)}–0`}
       />
     </>
+  );
+
+  const tablesCard = venueTables.length > 0 && (
+    <Card className="h-fit">
+      <CardHeader
+        title="Tables"
+        subtitle={ownIds.size < venueTables.length ? `${t.venue?.name} · ${ownIds.size} of ${venueTables.length} tables` : t.venue?.name}
+      />
+      <ul className="divide-y divide-border">
+        {shownTables.map((tb) => {
+          const current = t.matches.find((m) => m.tableId === tb.id && (m.status === "LIVE" || m.status === "READY"));
+          return (
+            <li key={tb.id} className="px-5 py-2.5 text-sm">
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-medium">{tb.name}</span>
+                {current ? (
+                  <Link href={scoreLink(current)} className={current.status === "LIVE" ? "text-live" : "text-accent"}>
+                    {current.status === "LIVE" ? `Live ${current.score1}–${current.score2}` : "Waiting to start"}
+                  </Link>
+                ) : groups.some((g) => g.group.tableId === tb.id && !g.complete) ? (
+                  <Link href={`/admin/tournaments/${t.id}/bracket`} className="text-muted">
+                    {groups.find((g) => g.group.tableId === tb.id)!.group.name}
+                  </Link>
+                ) : otherEvent.has(tb.id) ? (
+                  <span className="truncate text-muted">{otherEvent.get(tb.id)}</span>
+                ) : (
+                  <span className="text-muted">Free</span>
+                )}
+              </div>
+              {current && (
+                <div className="truncate text-xs text-muted">
+                  {names.get(current.entry1Id!)} v {names.get(current.entry2Id!)}
+                </div>
+              )}
+              {!ownIds.has(tb.id) && <div className="text-xs text-warn">Handed over once this match is done</div>}
+            </li>
+          );
+        })}
+      </ul>
+      {venueTables.length > 1 && (
+        <details className="border-t border-border">
+          <summary className="cursor-pointer px-5 py-2.5 text-sm font-medium text-accent select-none">Choose this comp&apos;s tables</summary>
+          <ActionForm action={setCompTablesAction.bind(null, t.id)} className="space-y-2 px-5 pb-4">
+            <p className="text-xs text-muted">
+              Untick tables to hand them to another comp at {t.venue?.name}, e.g. a plate. A match already on a table finishes there.
+            </p>
+            {venueTables.map((tb) => (
+              <label key={tb.id} className="flex items-center gap-2 text-sm">
+                <input type="checkbox" name="table" value={tb.id} defaultChecked={ownIds.has(tb.id)} />
+                <span className="font-medium">{tb.name}</span>
+                {otherEvent.has(tb.id) && <span className="truncate text-xs text-muted">{otherEvent.get(tb.id)}</span>}
+              </label>
+            ))}
+            <SubmitButton variant="secondary">Save tables</SubmitButton>
+          </ActionForm>
+        </details>
+      )}
+    </Card>
   );
 
   return (
@@ -248,7 +315,9 @@ async function ControlRoom({ params }: { params: PageProps<"/admin/tournaments/[
             then generate the draw.
           </EmptyState>
         </Card>
-      ) : (
+      ) : null}
+      {!hasDraw && tablesCard && <div className="max-w-md">{tablesCard}</div>}
+      {!hasDraw ? null : (
         <div className="grid gap-6 xl:grid-cols-[1fr_18rem]">
           <div className="space-y-6">
             <Card>
@@ -281,41 +350,7 @@ async function ControlRoom({ params }: { params: PageProps<"/admin/tournaments/[
             )}
           </div>
 
-          {tables.length > 0 && (
-            <Card className="h-fit">
-              <CardHeader title="Tables" subtitle={t.venue?.name} />
-              <ul className="divide-y divide-border">
-                {t.venue!.tables.map((tb) => {
-                  const current = t.matches.find((m) => m.tableId === tb.id && (m.status === "LIVE" || m.status === "READY"));
-                  return (
-                    <li key={tb.id} className="px-5 py-2.5 text-sm">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium">{tb.name}</span>
-                        {current ? (
-                          <Link href={scoreLink(current)} className={current.status === "LIVE" ? "text-live" : "text-accent"}>
-                            {current.status === "LIVE" ? `Live ${current.score1}–${current.score2}` : "Waiting to start"}
-                          </Link>
-                        ) : groups.some((g) => g.group.tableId === tb.id && !g.complete) ? (
-                          <Link href={`/admin/tournaments/${t.id}/bracket`} className="text-muted">
-                            {groups.find((g) => g.group.tableId === tb.id)!.group.name}
-                          </Link>
-                        ) : busyIds.has(tb.id) ? (
-                          <span className="text-muted">Other event</span>
-                        ) : (
-                          <span className="text-muted">Free</span>
-                        )}
-                      </div>
-                      {current && (
-                        <div className="truncate text-xs text-muted">
-                          {names.get(current.entry1Id!)} v {names.get(current.entry2Id!)}
-                        </div>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            </Card>
-          )}
+          {tablesCard}
         </div>
       )}
     </div>

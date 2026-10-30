@@ -18,6 +18,7 @@ import {
 } from "./bracket";
 import { completeDraw, completeMatch, EngineError, EngineMatch, reopenMatch } from "./engine-core";
 import { computeHandicap, parseStartMatrix, type MatchHandicap } from "./handicap";
+import { compTables } from "./comp-tables";
 import { drawsIntoGroups, groupOrder, manualDrawOrder, manualDrawProblems, manualGroups } from "./manual-draw";
 import {
   drawLineup,
@@ -249,9 +250,9 @@ export async function generateDraw(tournamentId: string) {
       if (t.format === "GROUPS_KO" && order.length < groupCount * 2) {
         throw new ServiceError(`Need at least ${groupCount * 2} ${word} for ${groupCount} groups`);
       }
-      const tables = t.venue?.tables ?? [];
+      const tables = compTables(t.venue?.tables ?? [], t.tableIds);
       if (t.tablePerGroup && tables.length < groupCount) {
-        throw new ServiceError(`Each group needs its own table: ${groupCount} groups but ${tables.length} tables at the venue`);
+        throw new ServiceError(`Each group needs its own table: ${groupCount} groups but ${tables.length} tables for this comp`);
       }
       const buckets = drawn && drawsIntoGroups(t.format) ? manualGroups(t.entries, groupCount) : distributeIntoGroups(order, groupCount);
       const groupIds = new Map<string, string>();
@@ -715,7 +716,7 @@ export async function autoAssignTables(tournamentId: string) {
     select: { tableId: true },
   });
   const busyIds = new Set(busy.map((b) => b.tableId));
-  const free = t.venue.tables.filter((table) => !busyIds.has(table.id));
+  const free = compTables(t.venue.tables, t.tableIds).filter((table) => !busyIds.has(table.id));
   const waiting = await db.match.findMany({
     where: { tournamentId, status: "READY", tableId: null },
     orderBy: [{ round: "asc" }, { bracket: "desc" }, { position: "asc" }],

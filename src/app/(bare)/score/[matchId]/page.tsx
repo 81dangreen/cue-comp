@@ -12,6 +12,7 @@ import {
 } from "@/actions/matches";
 import { requireUser } from "@/lib/auth";
 import { roundLabel } from "@/lib/bracket";
+import { compTables } from "@/lib/comp-tables";
 import { frameMatchData } from "@/lib/frame-match";
 import { describeHandicap } from "@/lib/handicap";
 import { fullScore, matchHandicap } from "@/lib/tournament-service";
@@ -88,7 +89,12 @@ async function Score({ params }: { params: PageProps<"/score/[matchId]">["params
     select: { tableId: true },
   });
   const busyIds = new Set(busy.map((b) => b.tableId));
-  const tables = (match.tournament.venue?.tables ?? []).map((t) => ({ id: t.id, name: t.name, busy: busyIds.has(t.id) }));
+  // The comp's tables (some may have gone to another comp), plus the one this match is on.
+  const venueTables = match.tournament.venue?.tables ?? [];
+  const own = compTables(venueTables, match.tournament.tableIds);
+  const tables = venueTables
+    .filter((t) => t.id === match.tableId || own.includes(t))
+    .map((t) => ({ id: t.id, name: t.name, busy: busyIds.has(t.id) }));
   const frameMatch = await frameMatchData(match);
   const backHref = isAdmin ? `/admin/tournaments/${match.tournamentId}` : `/t/${match.tournament.slug}`;
 

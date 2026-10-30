@@ -174,6 +174,8 @@ export async function updateTournament(tournamentId: string, _prev: ActionResult
       data: {
         ...data,
         venueId,
+        // The picked tables belong to the old venue.
+        ...(venueId !== tournament.venueId && { tableIds: [] }),
         description: data.description ?? null,
         raceToFinal: data.raceToFinal ?? null,
         maxEntries: data.maxEntries ?? null,
@@ -466,6 +468,23 @@ export async function setGroupTableAction(tournamentId: string, groupId: string,
       throw new Error("That table isn't at this tournament's venue");
     }
     await setGroupTable(groupId, tableId);
+  });
+}
+
+/**
+ * Pick which of the venue's tables this comp plays on, at any point (e.g. hand two tables to a plate
+ * at the quarter-finals). Matches already on a table finish there. Every table ticked = all of them.
+ */
+export async function setCompTablesAction(tournamentId: string, _prev: ActionResult, formData: FormData) {
+  return run(async () => {
+    const { tournament } = await requireTournament(tournamentId);
+    const venueTables = await db.table.findMany({ where: { venueId: tournament.venueId ?? "" }, select: { id: true } });
+    const picked = new Set(formData.getAll("table").map(String));
+    const tableIds = venueTables.filter((t) => picked.has(t.id)).map((t) => t.id);
+    if (!tableIds.length) throw new Error("Pick at least one table");
+    await db.tournament.update({ where: { id: tournamentId }, data: { tableIds: tableIds.length === venueTables.length ? [] : tableIds } });
+    publish(tournamentId);
+    return tableIds.length === venueTables.length ? "Using every table" : `Using ${tableIds.length} table${tableIds.length === 1 ? "" : "s"}`;
   });
 }
 
