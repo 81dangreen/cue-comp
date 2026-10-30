@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { manualDrawOrder, manualDrawProblems, manualGroups, type DrawEntry } from "./manual-draw";
+import { groupSizes, knockoutLines, manualDrawOrder, manualDrawProblems, manualGroups, type DrawEntry } from "./manual-draw";
 
 const e = (id: string, seed: number | null, drawGroup: number | null = null, minute = 0): DrawEntry => ({
   id,
@@ -41,5 +41,39 @@ describe("manual draw: groups", () => {
       "1 player still needs a group",
       "Group B needs at least 2 players",
     ]);
+  });
+});
+
+describe("draw lines for picking names into place", () => {
+  it("16 players: 8 matches numbered down the lines", () => {
+    expect(knockoutLines(16)).toEqual([
+      [1, 2],
+      [3, 4],
+      [5, 6],
+      [7, 8],
+      [9, 10],
+      [11, 12],
+      [13, 14],
+      [15, 16],
+    ]);
+  });
+
+  it("6 players: byes spread out, matching the bracket the draw makes", () => {
+    expect(knockoutLines(6)).toEqual([
+      [1, null],
+      [2, 3],
+      [4, null],
+      [5, 6],
+    ]);
+  });
+
+  it("sizes groups as evenly as the automatic draw", () => {
+    expect(groupSizes(16, 4)).toEqual([4, 4, 4, 4]);
+    expect(groupSizes(10, 3).sort()).toEqual([3, 3, 4]);
+  });
+
+  it("keeps each group in the order its places were filled", () => {
+    const entries = [e("a", 2, 0, 0), e("b", 1, 0, 1)];
+    expect(manualGroups(entries, 1)).toEqual([["b", "a"]]);
   });
 });

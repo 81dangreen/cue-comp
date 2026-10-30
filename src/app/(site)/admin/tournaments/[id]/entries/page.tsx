@@ -3,13 +3,14 @@ import { Suspense } from "react";
 import { addEntries, addPair, confirmEntry, generateDrawAction, removeEntry, saveEntries } from "@/actions/tournaments";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { drawToSeedOrder, groupName, singleElimination } from "@/lib/bracket";
-import { drawsIntoGroups, manualDrawOrder, manualDrawProblems, manualGroups } from "@/lib/manual-draw";
+import { groupName } from "@/lib/bracket";
+import { drawsIntoGroups, groupSizes, knockoutLines, manualDrawProblems, manualGroups } from "@/lib/manual-draw";
 import { entryName, entryNames, getTournamentFull, playerName, type TournamentFull } from "@/lib/queries";
 import { ActionButton, ActionForm, SubmitButton } from "@/components/forms";
+import { DrawBuilder, type DrawLayout } from "@/components/tournament/draw-builder";
 import { PairPicker } from "@/components/tournament/pair-picker";
 import { PlayerPicker } from "@/components/tournament/player-picker";
-import { Badge, Card, CardHeader, EmptyState, Field, Input, PageSkeleton, Select } from "@/components/ui";
+import { Badge, Card, CardHeader, EmptyState, Field, Input, PageSkeleton } from "@/components/ui";
 
 export default function EntriesPage({ params }: PageProps<"/admin/tournaments/[id]/entries">) {
   return (
@@ -33,14 +34,10 @@ async function Entries({ params }: { params: PageProps<"/admin/tournaments/[id]/
     select: { id: true, firstName: true, lastName: true, nickname: true, homeClub: true },
   });
   const manual = t.seeding === "MANUAL";
-  // A draw entered by hand: knockouts take a draw number per entry, groups + knockout a group.
+  // A draw done in the room, picked into place in the draw card (see DrawCard).
   const drawn = t.seeding === "DRAWN";
-  const intoGroups = drawn && drawsIntoGroups(t.format);
-  const groupCount = Math.max(1, t.groupCount ?? 2);
   const entries = [...t.entries].sort((a, b) =>
-    intoGroups
-      ? (a.drawGroup ?? 99) - (b.drawGroup ?? 99) || +a.createdAt - +b.createdAt
-      : (a.seed ?? 999) - (b.seed ?? 999) || entryName(a).localeCompare(entryName(b)),
+    manual ? (a.seed ?? 999) - (b.seed ?? 999) || entryName(a).localeCompare(entryName(b)) : +a.createdAt - +b.createdAt,
   );
   const handicapped = !!t.handicapStyle;
   // Before the draw, entries without a rank show the player's current rank for this discipline.
@@ -53,7 +50,7 @@ async function Entries({ params }: { params: PageProps<"/admin/tournaments/[id]/
         ).map((r) => [r.playerId, r.rank]),
       )
     : new Map<string, number>();
-  const showSave = ((manual || drawn) && !locked) || handicapped;
+  const showSave = (manual && !locked) || handicapped;
   const option = (p: { id: string; firstName: string; lastName: string; nickname: string | null; homeClub: string | null }) => ({
     id: p.id,
     name: playerName(p),
@@ -64,6 +61,7 @@ async function Entries({ params }: { params: PageProps<"/admin/tournaments/[id]/
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
+      {drawn && !locked && entries.length > 1 && <DrawCard t={t} word={pairs ? "pairs" : "players"} />}
       <Card>
         <CardHeader
           title={`${pairs ? "Pairs" : "Entries"} (${t.entries.length}${t.maxEntries ? ` / ${t.maxEntries}` : ""})`}
@@ -72,11 +70,7 @@ async function Entries({ params }: { params: PageProps<"/admin/tournaments/[id]/
               ? "The draw has been made — reset it to change entries."
               : manual
                 ? "Manual seeding: enter seeds then save."
-                : intoGroups
-                  ? "Enter the draw: choose each one's group as it's drawn, then save."
-                  : drawn
-                    ? "Enter the draw: number each one in the order drawn, then save. The bracket fills top to bottom: 1 v 2, 3 v 4, …"
-                    : null,
+                : null,
             handicapped && pairs
               ? "Give each pair its handicap group (1 = strongest). The start between groups is set in the tournament settings."
               : handicapped
@@ -97,7 +91,7 @@ async function Entries({ params }: { params: PageProps<"/admin/tournaments/[id]/
             <ul className="divide-y divide-border">
               {entries.map((e) => (
                 <li key={e.id} className="flex items-center gap-3 px-5 py-2.5">
-                  {(manual || (drawn && !intoGroups)) && (
+                  {manual && (
                     <Input
                       key={`seed-${e.seed ?? ""}`}
                       form="entries-form"
@@ -107,27 +101,9 @@ async function Entries({ params }: { params: PageProps<"/admin/tournaments/[id]/
                       defaultValue={e.seed ?? ""}
                       disabled={locked}
                       className="w-16 py-1 text-center"
-                      aria-label={drawn ? "Draw number" : "Seed"}
-                      placeholder={drawn ? "#" : "–"}
+                      aria-label="Seed"
+                      placeholder="–"
                     />
-                  )}
-                  {intoGroups && (
-                    <Select
-                      key={`group-${e.drawGroup ?? ""}`}
-                      form="entries-form"
-                      name={`group-${e.id}`}
-                      defaultValue={e.drawGroup ?? ""}
-                      disabled={locked}
-                      className="w-28 py-1"
-                      aria-label="Group"
-                    >
-                      <option value="">Group…</option>
-                      {Array.from({ length: groupCount }, (_, i) => (
-                        <option key={i} value={i}>
-                          Group {groupName(i)}
-                        </option>
-                      ))}
-                    </Select>
                   )}
                   <span className="flex-1 font-medium">
                     {entryName(e)}
@@ -181,10 +157,8 @@ async function Entries({ params }: { params: PageProps<"/admin/tournaments/[id]/
               <ActionForm id="entries-form" action={saveEntries.bind(null, t.id)} className="border-t border-border p-4">
                 <SubmitButton variant="secondary">
                   {handicapped
-                    ? `Save ${manual && !locked ? "seeds & " : drawn && !locked ? "draw & " : ""}${pairs ? "handicap groups" : "ranks"}`
-                    : drawn
-                      ? "Save draw"
-                      : "Save seeds"}
+                    ? `Save ${manual && !locked ? "seeds & " : ""}${pairs ? "handicap groups" : "ranks"}`
+                    : "Save seeds"}
                 </SubmitButton>
               </ActionForm>
             )}
@@ -192,7 +166,6 @@ async function Entries({ params }: { params: PageProps<"/admin/tournaments/[id]/
         )}
       </Card>
 
-      {drawn && !locked && entries.length > 0 && <DrawPreview t={t} groupCount={groupCount} word={pairs ? "pairs" : "players"} />}
 
       {!locked && pairs && (
         <Card className="h-fit">
@@ -228,64 +201,48 @@ async function Entries({ params }: { params: PageProps<"/admin/tournaments/[id]/
   );
 }
 
-/** What the hand-entered draw will make, so it can be checked against the draw in the room first. */
-function DrawPreview({ t, groupCount, word }: { t: TournamentFull; groupCount: number; word: string }) {
+/**
+ * Entering a draw done in the room: the first-round matches (or the groups) with a dropdown for
+ * each place. Full width above the entries, so the dropdowns have room for long pair names.
+ */
+function DrawCard({ t, word }: { t: TournamentFull; word: string }) {
   const confirmed = t.entries.filter((e) => e.status === "CONFIRMED");
   const names = entryNames(t.entries);
-  const problems = manualDrawProblems(confirmed, t.format, groupCount, word);
+  const groupCount = Math.max(1, t.groupCount ?? 2);
   const groups = drawsIntoGroups(t.format);
-  const round1 = groups
-    ? []
-    : singleElimination(drawToSeedOrder(manualDrawOrder(confirmed)), { raceTo: t.raceTo })
-        .filter((m) => m.round === 1)
-        .sort((a, b) => a.position - b.position)
-        .map((m) => [m.slot1, m.slot2].map((s) => (s.type === "entry" && s.entryId ? names.get(s.entryId) : null)));
+  const problems = manualDrawProblems(confirmed, t.format, groupCount, word);
+  const layout: DrawLayout = groups
+    ? { kind: "groups", sizes: groupSizes(confirmed.length, groupCount), names: Array.from({ length: groupCount }, (_, i) => `Group ${groupName(i)}`) }
+    : { kind: "knockout", lines: knockoutLines(confirmed.length) };
+  // What's saved so far, as places in the layout.
+  const initial: Record<string, string> = {};
+  if (groups) {
+    // Anyone beyond a group's places (from an earlier, uneven pick) is left to be placed again.
+    const sizes = layout.kind === "groups" ? layout.sizes : [];
+    manualGroups(confirmed, groupCount).forEach((ids, g) => ids.slice(0, sizes[g]).forEach((id, i) => (initial[`g${g}-${i + 1}`] = id)));
+  } else {
+    for (const e of confirmed) if (e.seed !== null && e.seed >= 1 && e.seed <= confirmed.length) initial[`d${e.seed}`] ??= e.id;
+  }
+  const options = confirmed.map((e) => ({ id: e.id, name: names.get(e.id) ?? "?" })).sort((a, b) => a.name.localeCompare(b.name));
   return (
-    <Card className="lg:col-start-1">
+    <Card className="lg:col-span-2">
       <CardHeader
-        title="Draw preview"
+        title="Enter the draw"
         subtitle={
-          problems.length
-            ? "Finish entering the draw to see what it makes."
-            : "Check this against the draw in the room, then generate it."
+          groups
+            ? `Pick each ${word.replace(/s$/, "")} into their group as they come out of the draw. A name picked once drops out of the other lists.`
+            : `Pick each ${word.replace(/s$/, "")} into the first-round matches as they come out of the draw. A name picked once drops out of the other lists.`
         }
       />
-      {!problems.length && (
-        <div className="flex flex-wrap items-center gap-3 border-b border-border px-5 py-3">
-          <ActionButton action={generateDrawAction.bind(null, t.id)}>Generate this draw</ActionButton>
-        </div>
-      )}
-      {problems.length ? (
-        <ul className="space-y-1 px-5 py-4 text-sm text-warn">
-          {problems.map((p) => (
-            <li key={p}>{p}</li>
-          ))}
-        </ul>
-      ) : groups ? (
-        <div className="grid gap-px bg-border sm:grid-cols-2">
-          {manualGroups(confirmed, groupCount).map((ids, i) => (
-            <div key={i} className="bg-surface px-5 py-3">
-              <div className="font-display text-lg font-bold uppercase">Group {groupName(i)}</div>
-              <ol className="mt-1 space-y-0.5 text-sm">
-                {ids.map((id) => (
-                  <li key={id}>{names.get(id)}</li>
-                ))}
-              </ol>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <ol className="divide-y divide-border">
-          {round1.map(([a, b], i) => (
-            <li key={i} className="grid grid-cols-[2.5rem_minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-5 py-2 text-sm">
-              <span className="font-display text-base font-bold text-muted">{i + 1}</span>
-              <span className={a ? "text-right font-medium" : "text-right text-muted"}>{a ?? "Bye"}</span>
-              <span className="text-muted">v</span>
-              <span className={b ? "font-medium" : "text-muted"}>{b ?? "Bye"}</span>
-            </li>
-          ))}
-        </ol>
-      )}
+      <DrawBuilder
+        entries={options}
+        layout={layout}
+        initial={initial}
+        save={saveEntries.bind(null, t.id)}
+        generate={generateDrawAction.bind(null, t.id)}
+        savedReady={problems.length === 0}
+        word={word}
+      />
     </Card>
   );
 }

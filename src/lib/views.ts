@@ -2,6 +2,7 @@
 import { computeStandings, unresolvedTies } from "./standings";
 import { eliminationPlacings } from "./results";
 import { roundLabel } from "./bracket";
+import { groupOrder } from "./manual-draw";
 import { describeFormat, majority } from "./match-format";
 import type { MatchWithTable, TournamentFull } from "./queries";
 
@@ -15,7 +16,7 @@ export function groupsWithStandings(t: TournamentFull) {
     shootout: new Map(t.entries.map((e) => [e.id, e.tiebreak])),
   };
   return t.groups.map((g) => {
-    const entryIds = t.entries.filter((e) => e.groupId === g.id).map((e) => e.id);
+    const entryIds = groupOrder(t.entries.filter((e) => e.groupId === g.id), t.seeding).map((e) => e.id);
     const matches = t.matches.filter((m) => m.groupId === g.id);
     const rows = computeStandings(entryIds, matches, rules);
     const complete = matches.length > 0 && matches.every((m) => m.status === "COMPLETED" || m.status === "VOID");

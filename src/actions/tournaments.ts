@@ -372,10 +372,13 @@ export async function saveEntries(tournamentId: string, _prev: ActionResult, for
     if (tournament.seeding === "DRAWN" && drawsIntoGroups(tournament.format)) {
       const groupCount = Math.max(1, tournament.groupCount ?? 2);
       for (const e of entries) {
+        if (!formData.has(`group-${e.id}`)) continue;
         const raw = String(formData.get(`group-${e.id}`) ?? "");
         const drawGroup = raw === "" ? null : Number(raw);
         if (drawGroup !== null && (!Number.isInteger(drawGroup) || drawGroup < 0 || drawGroup >= groupCount)) throw new Error("Choose a group from the list");
-        await db.entry.update({ where: { id: e.id }, data: { drawGroup } });
+        // Its place in the group (sets the order of the group's fixtures).
+        const place = Number(formData.get(`seed-${e.id}`) ?? "");
+        await db.entry.update({ where: { id: e.id }, data: { drawGroup, seed: drawGroup !== null && Number.isInteger(place) && place > 0 ? place : null } });
       }
       return "Saved";
     }
@@ -384,6 +387,8 @@ export async function saveEntries(tournamentId: string, _prev: ActionResult, for
     const label = tournament.seeding === "DRAWN" ? "Draw number" : "Seed";
     const seen = new Set<number>();
     for (const e of entries) {
+      // Only what the form sent: saving ranks on their own leaves seeds and the draw alone.
+      if (!formData.has(`seed-${e.id}`)) continue;
       const raw = String(formData.get(`seed-${e.id}`) ?? "").trim();
       const seed = raw ? Number(raw) : null;
       if (seed !== null) {

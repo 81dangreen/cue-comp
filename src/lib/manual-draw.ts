@@ -1,7 +1,8 @@
-// A draw entered by hand (e.g. done in the room on a spin-the-wheel, then typed in): knockouts take
-// each entry's draw number, groups each entry's group. Shared by the entries page and the draw.
+// A draw entered by hand (e.g. done in the room on a spin-the-wheel, then picked into place on the
+// entries page): knockouts store each entry's draw number (its line, top to bottom), groups each
+// entry's group and its place in it. Shared by the entries page and the draw.
 
-import { groupName } from "./bracket";
+import { distributeIntoGroups, groupName, nextPowerOfTwo, seedPositions } from "./bracket";
 
 export type DrawEntry = { id: string; seed: number | null; drawGroup: number | null; createdAt: Date };
 
@@ -13,13 +14,40 @@ export function manualDrawOrder(entries: DrawEntry[]) {
   return [...entries].sort((a, b) => (a.seed ?? Infinity) - (b.seed ?? Infinity)).map((e) => e.id);
 }
 
-/** Entries per group, in the order they were added. */
+/**
+ * The first round of a knockout for n entries, as the draw numbers on each side of each match
+ * (null = a bye): [[1, 2], [3, null], ...]. Byes sit where the automatic draw puts them; draw numbers
+ * run down the lines in order (see drawToSeedOrder, which turns them back into the bracket).
+ */
+export function knockoutLines(n: number): [number | null, number | null][] {
+  const size = Math.max(2, nextPowerOfTwo(n));
+  const order = seedPositions(size);
+  let next = 0;
+  const line = (seed: number) => (seed <= n ? ++next : null);
+  return Array.from({ length: size / 2 }, (_, p) => {
+    const a = line(order[2 * p]);
+    const b = line(order[2 * p + 1]);
+    return [a, b];
+  });
+}
+
+/** How many places each group has for n entries (as the automatic draw would size them). */
+export function groupSizes(n: number, groupCount: number) {
+  return distributeIntoGroups(Array.from({ length: n }, (_, i) => String(i)), groupCount).map((g) => g.length);
+}
+
+/** Entries per group, in their place in the group (then the order they were added). */
 export function manualGroups(entries: DrawEntry[], groupCount: number) {
   const groups: string[][] = Array.from({ length: groupCount }, () => []);
-  for (const e of [...entries].sort((a, b) => +a.createdAt - +b.createdAt)) {
+  for (const e of [...entries].sort((a, b) => (a.seed ?? Infinity) - (b.seed ?? Infinity) || +a.createdAt - +b.createdAt)) {
     if (e.drawGroup !== null && e.drawGroup < groupCount) groups[e.drawGroup].push(e.id);
   }
   return groups;
+}
+
+/** A group's entries in draw order: as picked for a draw entered by hand, else as added. */
+export function groupOrder<E extends { seed: number | null; createdAt: Date }>(entries: E[], seeding: string) {
+  return [...entries].sort((a, b) => (seeding === "DRAWN" ? (a.seed ?? Infinity) - (b.seed ?? Infinity) : 0) || +a.createdAt - +b.createdAt);
 }
 
 /** What still needs fixing before the draw can be made (empty when it's ready). */

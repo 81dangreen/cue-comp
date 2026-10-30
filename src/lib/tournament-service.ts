@@ -18,7 +18,7 @@ import {
 } from "./bracket";
 import { completeDraw, completeMatch, EngineError, EngineMatch, reopenMatch } from "./engine-core";
 import { computeHandicap, parseStartMatrix, type MatchHandicap } from "./handicap";
-import { drawsIntoGroups, manualDrawOrder, manualDrawProblems, manualGroups } from "./manual-draw";
+import { drawsIntoGroups, groupOrder, manualDrawOrder, manualDrawProblems, manualGroups } from "./manual-draw";
 import {
   drawLineup,
   frameAt,
@@ -310,8 +310,8 @@ export async function groupStandings(tx: Tx | typeof db, tournamentId: string) {
     include: { entries: true, matches: true },
   });
   return groups.map((g) => {
-    // Seed order inside the group isn't stored, so fall back to entry creation order.
-    const entryIds = g.entries.sort((a, b) => +a.createdAt - +b.createdAt).map((e) => e.id);
+    // Draw order inside the group: as picked for a draw entered by hand, else entry creation order.
+    const entryIds = groupOrder(g.entries, t.seeding).map((e) => e.id);
     return { group: g, rows: computeStandings(entryIds, g.matches, standingRules(t, g.entries)) };
   });
 }
