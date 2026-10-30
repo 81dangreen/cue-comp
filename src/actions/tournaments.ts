@@ -412,10 +412,10 @@ export async function generateDrawAction(tournamentId: string) {
 
 /**
  * Choose how the draw is made, from the control room (before it's made): RANDOM (or seeded, with
- * manual seeds) is generated straight away; DRAWN goes to the entries page to type in the draw.
+ * manual seeds) is generated straight away; DRAWN shows the draw to pick into place.
  */
 export async function chooseDrawAction(tournamentId: string, seeding: Seeding) {
-  const result = await run(async () => {
+  return run(async () => {
     await requireTournament(tournamentId);
     await assertDrawNotMade(tournamentId);
     await db.tournament.update({ where: { id: tournamentId }, data: { seeding } });
@@ -424,8 +424,6 @@ export async function chooseDrawAction(tournamentId: string, seeding: Seeding) {
       return "Draw generated";
     }
   });
-  if (seeding === "DRAWN" && !result?.error) redirect(`/admin/tournaments/${tournamentId}/entries`);
-  return result;
 }
 
 export async function resetDrawAction(tournamentId: string) {

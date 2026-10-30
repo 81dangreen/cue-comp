@@ -5,7 +5,6 @@ import {
   autoAssignTablesAction,
   chooseDrawAction,
   setAutoPilotAction,
-  generateDrawAction,
   generateKnockoutAction,
   resetDrawAction,
   setGroupTableAction,
@@ -23,6 +22,7 @@ import { groupsWithStandings, matchCounts, matchLabels } from "@/lib/views";
 import { ActionButton, ActionForm, SubmitButton } from "@/components/forms";
 import { MatchList } from "@/components/tournament/match-list";
 import { TableSelect } from "@/components/tournament/table-select";
+import { DrawCard } from "@/components/tournament/draw-card";
 import { WalkoverControl } from "@/components/tournament/walkover-control";
 import { ButtonLink, Card, CardHeader, EmptyState, PageSkeleton, Select } from "@/components/ui";
 
@@ -118,7 +118,7 @@ async function ControlRoom({ params }: { params: PageProps<"/admin/tournaments/[
             <div>
               <div className="text-xs text-muted">Your draw</div>
               <div className={drawProblems.length ? "text-sm font-semibold text-warn" : "text-sm font-semibold text-accent"}>
-                {drawProblems.length ? drawProblems[0] : "Entered and ready to generate"}
+                {drawProblems.length ? `${drawProblems[0]} (below)` : "Entered and ready to generate (below)"}
               </div>
             </div>
           )}
@@ -147,12 +147,6 @@ async function ControlRoom({ params }: { params: PageProps<"/admin/tournaments/[
               <>
                 <ActionButton action={chooseDrawAction.bind(null, t.id, "RANDOM")} variant="ghost">
                   Random draw instead
-                </ActionButton>
-                <ButtonLink href={`/admin/tournaments/${t.id}/entries`} variant="secondary">
-                  {drawProblems.length ? "Enter the draw" : "Check the draw"}
-                </ButtonLink>
-                <ActionButton action={generateDrawAction.bind(null, t.id)} disabled={confirmed < 2 || drawProblems.length > 0}>
-                  Generate your draw
                 </ActionButton>
               </>
             )}
@@ -245,7 +239,9 @@ async function ControlRoom({ params }: { params: PageProps<"/admin/tournaments/[
         </Card>
       )}
 
-      {!hasDraw ? (
+      {!hasDraw && ownDraw && confirmed >= 2 ? (
+        <DrawCard t={t} word={word} />
+      ) : !hasDraw ? (
         <Card>
           <EmptyState title="No draw yet">
             Add {word} on the <Link href={`/admin/tournaments/${t.id}/entries`} className="text-accent hover:underline">entries</Link> tab,

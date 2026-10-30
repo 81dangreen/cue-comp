@@ -1,13 +1,10 @@
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { addEntries, addPair, confirmEntry, generateDrawAction, removeEntry, saveEntries } from "@/actions/tournaments";
+import { addEntries, addPair, confirmEntry, removeEntry, saveEntries } from "@/actions/tournaments";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { groupName } from "@/lib/bracket";
-import { drawsIntoGroups, groupSizes, knockoutLines, manualDrawProblems, manualGroups } from "@/lib/manual-draw";
-import { entryName, entryNames, getTournamentFull, playerName, type TournamentFull } from "@/lib/queries";
+import { entryName, getTournamentFull, playerName } from "@/lib/queries";
 import { ActionButton, ActionForm, SubmitButton } from "@/components/forms";
-import { DrawBuilder, type DrawLayout } from "@/components/tournament/draw-builder";
 import { PairPicker } from "@/components/tournament/pair-picker";
 import { PlayerPicker } from "@/components/tournament/player-picker";
 import { Badge, Card, CardHeader, EmptyState, Field, Input, PageSkeleton } from "@/components/ui";
@@ -34,8 +31,6 @@ async function Entries({ params }: { params: PageProps<"/admin/tournaments/[id]/
     select: { id: true, firstName: true, lastName: true, nickname: true, homeClub: true },
   });
   const manual = t.seeding === "MANUAL";
-  // A draw done in the room, picked into place in the draw card (see DrawCard).
-  const drawn = t.seeding === "DRAWN";
   const entries = [...t.entries].sort((a, b) =>
     manual ? (a.seed ?? 999) - (b.seed ?? 999) || entryName(a).localeCompare(entryName(b)) : +a.createdAt - +b.createdAt,
   );
@@ -61,7 +56,6 @@ async function Entries({ params }: { params: PageProps<"/admin/tournaments/[id]/
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
-      {drawn && !locked && entries.length > 1 && <DrawCard t={t} word={pairs ? "pairs" : "players"} />}
       <Card>
         <CardHeader
           title={`${pairs ? "Pairs" : "Entries"} (${t.entries.length}${t.maxEntries ? ` / ${t.maxEntries}` : ""})`}
@@ -198,51 +192,5 @@ async function Entries({ params }: { params: PageProps<"/admin/tournaments/[id]/
         </Card>
       )}
     </div>
-  );
-}
-
-/**
- * Entering a draw done in the room: the first-round matches (or the groups) with a dropdown for
- * each place. Full width above the entries, so the dropdowns have room for long pair names.
- */
-function DrawCard({ t, word }: { t: TournamentFull; word: string }) {
-  const confirmed = t.entries.filter((e) => e.status === "CONFIRMED");
-  const names = entryNames(t.entries);
-  const groupCount = Math.max(1, t.groupCount ?? 2);
-  const groups = drawsIntoGroups(t.format);
-  const problems = manualDrawProblems(confirmed, t.format, groupCount, word);
-  const layout: DrawLayout = groups
-    ? { kind: "groups", sizes: groupSizes(confirmed.length, groupCount), names: Array.from({ length: groupCount }, (_, i) => `Group ${groupName(i)}`) }
-    : { kind: "knockout", lines: knockoutLines(confirmed.length) };
-  // What's saved so far, as places in the layout.
-  const initial: Record<string, string> = {};
-  if (groups) {
-    // Anyone beyond a group's places (from an earlier, uneven pick) is left to be placed again.
-    const sizes = layout.kind === "groups" ? layout.sizes : [];
-    manualGroups(confirmed, groupCount).forEach((ids, g) => ids.slice(0, sizes[g]).forEach((id, i) => (initial[`g${g}-${i + 1}`] = id)));
-  } else {
-    for (const e of confirmed) if (e.seed !== null && e.seed >= 1 && e.seed <= confirmed.length) initial[`d${e.seed}`] ??= e.id;
-  }
-  const options = confirmed.map((e) => ({ id: e.id, name: names.get(e.id) ?? "?" })).sort((a, b) => a.name.localeCompare(b.name));
-  return (
-    <Card className="lg:col-span-2">
-      <CardHeader
-        title="Enter the draw"
-        subtitle={
-          groups
-            ? `Pick each ${word.replace(/s$/, "")} into their group as they come out of the draw. A name picked once drops out of the other lists.`
-            : `Pick each ${word.replace(/s$/, "")} into the first-round matches as they come out of the draw. A name picked once drops out of the other lists.`
-        }
-      />
-      <DrawBuilder
-        entries={options}
-        layout={layout}
-        initial={initial}
-        save={saveEntries.bind(null, t.id)}
-        generate={generateDrawAction.bind(null, t.id)}
-        savedReady={problems.length === 0}
-        word={word}
-      />
-    </Card>
   );
 }

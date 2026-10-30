@@ -148,10 +148,10 @@ It prints, or saves as a PDF, on plain white.
 ## Entering the draw yourself
 
 When the draw is done in the room (e.g. on a spin-the-wheel), choose **Enter the draw yourself** in the control room
-(or set **Draw** in the settings). The entries page then shows the draw to fill in: the first-round matches for a
+(or set **Draw** in the settings). The control room then shows the draw to fill in: the first-round matches for a
 knockout, or each group's places for groups + knockout, with a dropdown for each place. A name picked in one dropdown
 drops out of the others. Byes go where the automatic draw puts them (spread through the bracket) and need no pick.
-Save, then **Generate this draw** (also in the control room once it's complete). Knockouts store each entry's line as
+Save, then **Generate this draw**. Knockouts store each entry's line as
 its draw number; groups store the group and place, which sets the order of the group's fixtures. Logic in
 `src/lib/manual-draw.ts` and `drawToSeedOrder` in `src/lib/bracket.ts`.
 
