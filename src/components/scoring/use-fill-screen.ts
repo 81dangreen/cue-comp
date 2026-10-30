@@ -5,12 +5,12 @@ import { useEffect, useState } from "react";
 const BACKGROUND = "#060d1c";
 
 /**
- * The window's height in pixels, kept up to date through rotation and full screen, for a scoreboard
- * that fills the screen. Some tablet browsers leave viewport units at a stale height after rotating or
+ * A style giving the window's height in pixels (as `height`, or `minHeight` for a screen that may
+ * scroll), kept up to date through rotation and full screen, for a tablet screen that fills it. Some tablet browsers leave viewport units at a stale height after rotating or
  * going full screen (leaving a band of page below the board), so the board is sized from this once
  * mounted. Also darkens the page behind the board while it's open, so any gap isn't white.
  */
-export function useFillScreen() {
+export function useFillScreen(property: "height" | "minHeight" = "height") {
   const [height, setHeight] = useState<number>();
   useEffect(() => {
     const update = () => setHeight(window.visualViewport?.height ?? window.innerHeight);
@@ -31,5 +31,5 @@ export function useFillScreen() {
       window.removeEventListener("orientationchange", settle);
     };
   }, []);
-  return height === undefined ? undefined : { height };
+  return height === undefined ? undefined : { [property]: height };
 }

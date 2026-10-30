@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
-import { tableAddFrameAction, tableStartMatchAction, tableUndoFrameAction, unpairTabletAction } from "@/actions/table";
+import { tableAddFrameAction, tableStartMatchAction, tableUndoFrameAction } from "@/actions/table";
 import { APP_NAME } from "@/lib/brand";
 import { roundLabel } from "@/lib/bracket";
 import { db } from "@/lib/db";
@@ -10,12 +10,12 @@ import { describeHandicap } from "@/lib/handicap";
 import { matchHandicap } from "@/lib/tournament-service";
 import { entryName } from "@/lib/queries";
 import { raceText } from "@/lib/views";
-import { ConfirmButton } from "@/components/forms";
 import { LiveRefresher } from "@/components/live-refresher";
 import { LogoMark } from "@/components/logo";
 import { FrameMatchStart, FrameScoreboard } from "@/components/scoring/frame-scoreboard";
 import { Scoreboard } from "@/components/scoring/scoreboard";
 import { Clock } from "@/components/table/clock";
+import { FillMain } from "@/components/table/fill-main";
 import { PairForm } from "@/components/table/pair-form";
 import { StartMatch } from "@/components/table/start-match";
 import { WakeLock } from "@/components/table/wake-lock";
@@ -138,7 +138,7 @@ async function TableScreen({ searchParams }: { searchParams: PageProps<"/table">
 
   if (current) {
     return (
-      <main className={`${screen} flex flex-col p-3 sm:p-6`}>
+      <FillMain className={`${screen} flex flex-col p-3 sm:p-6`}>
         {chrome}
         <TopBar tableName={device.table.name} venueName={device.table.venue.name} />
         <div className="flex flex-1 flex-col items-center justify-center gap-[3vh] py-[2vh] text-center">
@@ -171,12 +171,12 @@ async function TableScreen({ searchParams }: { searchParams: PageProps<"/table">
           )}
         </div>
         {lastResult}
-      </main>
+      </FillMain>
     );
   }
 
   return (
-    <main className={`${screen} flex flex-col p-6`}>
+    <FillMain className={`${screen} flex flex-col p-6`}>
       {chrome}
       <TopBar tableName={device.table.name} venueName={device.table.venue.name} />
       <div className="flex flex-1 flex-col items-center justify-center gap-8 text-center">
@@ -187,19 +187,8 @@ async function TableScreen({ searchParams }: { searchParams: PageProps<"/table">
         </div>
         {lastResult}
       </div>
-      <footer className="flex items-center justify-between text-sm text-white/40">
-        <span>{device.name}</span>
-        <form action={unpairTabletAction}>
-          <ConfirmButton
-            variant="ghost"
-            message="Unpair this tablet? It will stop showing this table until it is paired again."
-            className="font-normal text-white/40 hover:bg-white/10 hover:text-white/70"
-          >
-            Unpair this tablet
-          </ConfirmButton>
-        </form>
-      </footer>
-    </main>
+      <footer className="text-sm text-white/40">{device.name}</footer>
+    </FillMain>
   );
 }
 
@@ -215,7 +204,7 @@ function TopBar({ tableName, venueName }: { tableName: string; venueName: string
 
 function PairScreen({ code }: { code?: string }) {
   return (
-    <main className={`${screen} grid place-items-center p-6`}>
+    <FillMain className={`${screen} grid place-items-center p-6`}>
       <div className="w-full max-w-md text-center">
         <LogoMark className="mx-auto h-20 w-20" />
         <h1 className="mt-5 text-3xl font-bold">Set up this tablet</h1>
@@ -225,7 +214,7 @@ function PairScreen({ code }: { code?: string }) {
         </p>
         <PairForm code={code} />
       </div>
-    </main>
+    </FillMain>
   );
 }
 

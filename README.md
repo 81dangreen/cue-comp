@@ -50,7 +50,7 @@ Put a tablet on each table and let players score their own matches.
 4. **Unattended-friendly.** The screen stays awake, the page re-syncs after a wifi drop (with a warning banner while
    offline), and it can be added to the home screen to run full screen.
 
-Unpair a lost tablet from the venue page. Tablets reach the server over the venue network, so the QR code uses this
+Tablets are paired and unpaired only from the admin (the tablet has no unpair button, so a stray tap can't take a table offline). Unpair a lost tablet from the venue page. Tablets reach the server over the venue network, so the QR code uses this
 computer's network address when you browse the admin on `localhost`. For a real event, run a production build
 (`npm run build && npm start`) rather than the dev server.
 

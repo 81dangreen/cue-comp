@@ -1,7 +1,6 @@
 import "server-only";
 import { randomInt } from "node:crypto";
 import { cache } from "react";
-import { cookies } from "next/headers";
 import { db } from "./db";
 import { readSealedCookie, writeSealedCookie } from "./session";
 
@@ -59,12 +58,6 @@ export async function pairDevice(rawCode: string, name?: string) {
   });
   await writeSealedCookie(DEVICE_COOKIE, { deviceId: device.id }, DEVICE_TTL_SECONDS);
   return device;
-}
-
-export async function forgetDevice() {
-  const device = await getDevice();
-  if (device) await db.device.deleteMany({ where: { id: device.id } });
-  (await cookies()).delete(DEVICE_COOKIE);
 }
 
 /** Load a match only if it's currently assigned to this device's table. */

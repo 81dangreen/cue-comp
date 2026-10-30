@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { forgetDevice, pairDevice, requireDeviceMatch } from "@/lib/device";
+import { pairDevice, requireDeviceMatch } from "@/lib/device";
 import { isDish, type Dish } from "@/lib/constants";
 import type { Lineup } from "@/lib/match-format";
 import { clientIp, limitAttempts } from "@/lib/rate-limit";
@@ -20,11 +20,6 @@ export async function pairTabletAction(_prev: ActionResult, formData: FormData):
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Pairing failed" };
   }
-  redirect("/table");
-}
-
-export async function unpairTabletAction() {
-  await forgetDevice();
   redirect("/table");
 }
 
