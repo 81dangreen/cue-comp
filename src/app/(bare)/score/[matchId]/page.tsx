@@ -30,7 +30,7 @@ export const metadata: Metadata = { title: "Scoring" };
 
 export default function ScorePage({ params }: PageProps<"/score/[matchId]">) {
   return (
-    <Suspense fallback={<div className="min-h-dvh bg-[#0b0f0d]" />}>
+    <Suspense fallback={<div className="min-h-fill bg-[#0b0f0d]" />}>
       <Score params={params} />
     </Suspense>
   );
@@ -75,7 +75,7 @@ async function Score({ params }: { params: PageProps<"/score/[matchId]">["params
 
   if (!match.entry1Id || !match.entry2Id || match.isBye) {
     return (
-      <div className="grid min-h-dvh place-items-center bg-[#0b0f0d] p-6 text-center text-white">
+      <div className="grid min-h-fill place-items-center bg-[#0b0f0d] p-6 text-center text-white">
         <div>
           <p className="text-lg font-semibold">This match isn&apos;t ready yet</p>
           <p className="mt-1 text-white/60">Both players need to be known before it can be scored.</p>
@@ -102,7 +102,7 @@ async function Score({ params }: { params: PageProps<"/score/[matchId]">["params
     <>
       <LiveRefresher tournamentId={match.tournamentId} quiet />
       {frameMatch && notStarted ? (
-        <div className="flex min-h-dvh flex-col items-center gap-[3vh] bg-[radial-gradient(ellipse_at_top,#1d3a6b_0%,#0d1d3b_45%,#060d1c_100%)] p-3 text-white sm:p-6">
+        <div className="flex min-h-fill flex-col items-center gap-[3vh] bg-[radial-gradient(ellipse_at_top,#1d3a6b_0%,#0d1d3b_45%,#060d1c_100%)] p-3 text-white sm:p-6">
           <Link href={backHref} className="self-start rounded-lg px-2 py-1 text-sm text-white/70 hover:bg-white/10">
             ← Back
           </Link>

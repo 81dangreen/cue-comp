@@ -32,7 +32,7 @@ export const viewport: Viewport = { themeColor: "#0d1d3b" };
 const RESULT_DISPLAY_MS = 10 * 60 * 1000;
 const resultCutoff = () => new Date(Date.now() - RESULT_DISPLAY_MS);
 
-const screen = "min-h-dvh bg-[radial-gradient(ellipse_at_top,#1d3a6b_0%,#0d1d3b_45%,#060d1c_100%)] text-white";
+const screen = "min-h-fill bg-[radial-gradient(ellipse_at_top,#1d3a6b_0%,#0d1d3b_45%,#060d1c_100%)] text-white";
 
 export default function TablePage({ searchParams }: PageProps<"/table">) {
   return (

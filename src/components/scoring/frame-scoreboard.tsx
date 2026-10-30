@@ -18,6 +18,7 @@ import type { Dish } from "@/lib/constants";
 import { LOCKED_MESSAGE, useConnection } from "../connection";
 import type { ActionResult } from "../forms";
 import { cx } from "../ui";
+import { useFillScreen } from "./use-fill-screen";
 
 type Member = { id: string; name: string };
 
@@ -58,12 +59,13 @@ const SIDE = {
 } as const;
 
 const screen =
-  "flex h-dvh flex-col gap-2 overflow-hidden bg-[radial-gradient(ellipse_at_top,#1d3a6b_0%,#0d1d3b_45%,#060d1c_100%)] p-2 text-white sm:gap-3 sm:p-4";
+  "flex h-fill flex-col gap-2 overflow-hidden bg-[radial-gradient(ellipse_at_top,#1d3a6b_0%,#0d1d3b_45%,#060d1c_100%)] p-2 text-white sm:gap-3 sm:p-4";
 const dishButton =
   "flex-1 truncate rounded-lg border border-white/10 bg-white/5 px-2 py-2 text-xs font-medium text-white/80 active:bg-white/15 disabled:opacity-40 sm:rounded-xl sm:text-sm";
 
 /** Scoring for frame-list matches: a strip of every frame and big "who won this frame" buttons. */
 export function FrameScoreboard(props: FrameMatchProps) {
+  const fill = useFillScreen();
   const [pending, startTransition] = useTransition();
   const router = useRouter();
   // Scoring waits while the connection is down or the real score is reloading after it.
@@ -162,7 +164,7 @@ export function FrameScoreboard(props: FrameMatchProps) {
 
   return (
     // Fills the screen exactly (no scrolling) from a 6" phone up: sizes follow the screen height.
-    <div className={screen}>
+    <div style={fill} className={screen}>
       <header className="flex items-center justify-between gap-2 text-xs text-white/70 sm:text-sm">
         {props.backHref ? (
           <Link href={props.backHref} className="rounded-lg px-2 py-1 hover:bg-white/10">

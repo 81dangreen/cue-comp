@@ -166,6 +166,16 @@ body {
 }
 
 /* Printouts (the end-of-day report) are always light, whatever theme is on screen. */
+/* The screen's height, falling back to vh for browsers without dynamic viewport units (e.g. older Silk on Fire tablets). */
+@utility h-fill {
+  height: 100vh;
+  height: 100dvh;
+}
+@utility min-h-fill {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
 @media print {
   :root,
   :root[data-theme] {
