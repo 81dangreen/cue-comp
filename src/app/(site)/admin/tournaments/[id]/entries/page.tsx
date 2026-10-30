@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { addEntries, addPair, confirmEntry, removeEntry, saveEntries } from "@/actions/tournaments";
+import { addEntries, addPair, confirmEntry, generateDrawAction, removeEntry, saveEntries } from "@/actions/tournaments";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { drawToSeedOrder, groupName, singleElimination } from "@/lib/bracket";
@@ -247,9 +247,14 @@ function DrawPreview({ t, groupCount, word }: { t: TournamentFull; groupCount: n
         subtitle={
           problems.length
             ? "Finish entering the draw to see what it makes."
-            : "Check this against the draw in the room, then make the draw in the control room."
+            : "Check this against the draw in the room, then generate it."
         }
       />
+      {!problems.length && (
+        <div className="flex flex-wrap items-center gap-3 border-b border-border px-5 py-3">
+          <ActionButton action={generateDrawAction.bind(null, t.id)}>Generate this draw</ActionButton>
+        </div>
+      )}
       {problems.length ? (
         <ul className="space-y-1 px-5 py-4 text-sm text-warn">
           {problems.map((p) => (

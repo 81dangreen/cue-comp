@@ -32,8 +32,9 @@ export function ActionForm({
   const ref = useRef<HTMLFormElement>(null);
   useEffect(() => {
     if (!ref.current || !state) return;
-    if (state.error && submitted.current) {
-      // React resets a form after its action returns, even with an error; put the user's input back.
+    if ((state.error || !resetOnSuccess) && submitted.current) {
+      // React resets a form to the values it was first rendered with after its action returns,
+      // even when it saved; put back what was submitted (unless the form should clear on success).
       restoreFields(ref.current, submitted.current);
     } else if (!state.error && resetOnSuccess) {
       ref.current.reset();

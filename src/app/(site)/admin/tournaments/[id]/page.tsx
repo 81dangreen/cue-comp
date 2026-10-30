@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import {
   autoAssignTablesAction,
+  chooseDrawAction,
   setAutoPilotAction,
   generateDrawAction,
   generateKnockoutAction,
@@ -15,6 +16,7 @@ import { assignTableAction } from "@/actions/matches";
 import { fullScore } from "@/lib/tournament-service";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { manualDrawProblems } from "@/lib/manual-draw";
 import { ordinal } from "@/lib/results";
 import { entryNames, getTournamentFull, type MatchWithTable } from "@/lib/queries";
 import { groupsWithStandings, matchCounts, matchLabels } from "@/lib/views";
@@ -49,6 +51,17 @@ async function ControlRoom({ params }: { params: PageProps<"/admin/tournaments/[
   const groupsDone = groupMatches.length > 0 && groupMatches.every((m) => m.status === "COMPLETED" || m.status === "VOID");
   const canKnockout = t.format === "GROUPS_KO" && groupsDone && koMatches.length === 0;
   const word = t.entryType === "PAIRS" ? "pairs" : "players";
+  // A draw done in the room and typed in on the entries page.
+  const ownDraw = t.seeding === "DRAWN";
+  const drawProblems =
+    ownDraw && !hasDraw
+      ? manualDrawProblems(
+          t.entries.filter((e) => e.status === "CONFIRMED"),
+          t.format,
+          t.format === "ROUND_ROBIN" ? 1 : Math.max(1, t.groupCount ?? 2),
+          word,
+        )
+      : [];
   const groups = groupsWithStandings(t);
   const shootouts = koMatches.length === 0 ? groups.flatMap((g) => g.shootouts.map((set) => ({ group: g.group, set }))) : [];
   const showGroupPanel = groups.length > 0 && koMatches.length === 0 && (t.tablePerGroup || shootouts.length > 0);
@@ -101,6 +114,14 @@ async function ControlRoom({ params }: { params: PageProps<"/admin/tournaments/[
               </div>
             </div>
           )}
+          {!hasDraw && ownDraw && (
+            <div>
+              <div className="text-xs text-muted">Your draw</div>
+              <div className={drawProblems.length ? "text-sm font-semibold text-warn" : "text-sm font-semibold text-accent"}>
+                {drawProblems.length ? drawProblems[0] : "Entered and ready to generate"}
+              </div>
+            </div>
+          )}
           {awaiting > 0 && (
             <Link href={`/admin/tournaments/${t.id}/entries`} className="text-sm text-warn hover:underline">
               {awaiting} registration{awaiting === 1 ? "" : "s"} awaiting confirmation →
@@ -112,10 +133,28 @@ async function ControlRoom({ params }: { params: PageProps<"/admin/tournaments/[
                 {t.registrationOpen ? "Close registration" : "Open registration"}
               </ActionButton>
             )}
-            {!hasDraw && (
-              <ActionButton action={generateDrawAction.bind(null, t.id)} disabled={confirmed < 2}>
-                Generate draw
-              </ActionButton>
+            {!hasDraw && !ownDraw && (
+              <>
+                <ActionButton action={chooseDrawAction.bind(null, t.id, "DRAWN")} variant="secondary" disabled={confirmed < 2}>
+                  Enter the draw yourself
+                </ActionButton>
+                <ActionButton action={chooseDrawAction.bind(null, t.id, t.seeding === "MANUAL" ? "MANUAL" : "RANDOM")} disabled={confirmed < 2}>
+                  {t.seeding === "MANUAL" ? "Generate seeded draw" : "Generate random draw"}
+                </ActionButton>
+              </>
+            )}
+            {!hasDraw && ownDraw && (
+              <>
+                <ActionButton action={chooseDrawAction.bind(null, t.id, "RANDOM")} variant="ghost">
+                  Random draw instead
+                </ActionButton>
+                <ButtonLink href={`/admin/tournaments/${t.id}/entries`} variant="secondary">
+                  {drawProblems.length ? "Enter the draw" : "Check the draw"}
+                </ButtonLink>
+                <ActionButton action={generateDrawAction.bind(null, t.id)} disabled={confirmed < 2 || drawProblems.length > 0}>
+                  Generate your draw
+                </ActionButton>
+              </>
             )}
             {canKnockout && (
               <ActionButton action={generateKnockoutAction.bind(null, t.id)} disabled={shootouts.length > 0}>
