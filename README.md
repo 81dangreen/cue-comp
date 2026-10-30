@@ -176,6 +176,8 @@ so run a single instance (no autoscaling) until `src/lib/events.ts` moves to a s
    create your organisation.
 4. Custom domain: web service → **Settings → Custom Domains → Add**, then add the DNS record Render shows at your
    registrar. HTTPS is automatic (required for `.app` domains).
+   Visits to the `*.onrender.com` address are then redirected to the domain in `SITE_HOST` (default `cuecomp.app`,
+   see `src/lib/brand.ts`), so shared links and tablet QR codes always use it.
 
 Any host that runs a long-lived Node process works the same way (Railway, Fly.io, a VPS): set `DATABASE_URL`,
 `SESSION_PASSWORD` and `SETUP_KEY`, build with `npm run build`, start with `npm start`.
