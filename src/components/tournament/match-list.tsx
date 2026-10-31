@@ -10,6 +10,11 @@ export function StatusBadge({ status }: { status: string }) {
   return <Badge>Waiting</Badge>;
 }
 
+/** Marks plate matches so they can't be mistaken for the main draw's. */
+export function PlateTag() {
+  return <span className="shrink-0 rounded bg-warn/15 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-warn uppercase">Plate</span>;
+}
+
 /**
  * Compact one-line list of matches. `labels` (matchId → round name) adds a round column for lists
  * that mix rounds; `actions` renders an extra column per match.
@@ -37,7 +42,12 @@ export function MatchList({
         const href = linkFor?.(m);
         const row = (
           <div className={cx("grid items-center gap-3", labels ? "grid-cols-[9rem_1fr_auto_1fr]" : "grid-cols-[1fr_auto_1fr]")}>
-            {labels && <span className="truncate text-xs text-muted">{labels.get(m.id)}</span>}
+            {labels && (
+              <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted">
+                {m.bracket === "PLATE" && <PlateTag />}
+                <span className="truncate">{m.bracket === "PLATE" ? labels.get(m.id)?.replace(/^Plate /, "") : labels.get(m.id)}</span>
+              </span>
+            )}
             <span className={cx("truncate text-right text-[15px]", done && (m.winnerId === m.entry1Id ? "font-semibold" : "text-muted"))}>{n1}</span>
             <span className="min-w-16 rounded-md border border-border bg-surface-2 px-2 py-1 text-center text-[15px] font-bold tabular-nums">
               {m.status === "PENDING" || m.status === "READY"

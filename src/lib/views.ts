@@ -89,6 +89,21 @@ export function callOrder(a: { round: number; bracket: string; position: number 
 }
 
 /**
+ * Matches split by round for the control room, in the order to call them (see `callOrder`): e.g.
+ * "Quarter Finals", then "Plate Quarter Finals", then "Semi Finals". Group matches stay together.
+ */
+export function roundSections<M extends { id: string; round: number; bracket: string; position: number }>(matches: M[], labels: Map<string, string>) {
+  const sections: { title: string; plate: boolean; matches: M[] }[] = [];
+  for (const m of [...matches].sort(callOrder)) {
+    const title = m.bracket === "GROUP" ? "Group stage" : (labels.get(m.id) ?? "");
+    const section = sections.find((s) => s.title === title);
+    if (section) section.matches.push(m);
+    else sections.push({ title, plate: m.bracket === "PLATE", matches: [m] });
+  }
+  return sections;
+}
+
+/**
  * What's coming up, for players watching the public page. Groups with their own table get a
  * running order for that table (what's on now, then each match still to play, in order); every
  * other ready match joins one queue, those already called to a table first.

@@ -20,13 +20,13 @@ import { compTables } from "@/lib/comp-tables";
 import { manualDrawProblems } from "@/lib/manual-draw";
 import { ordinal } from "@/lib/results";
 import { entryNames, getTournamentFull, type MatchWithTable } from "@/lib/queries";
-import { groupsWithStandings, matchCounts, matchLabels } from "@/lib/views";
+import { groupsWithStandings, matchCounts, matchLabels, roundSections } from "@/lib/views";
 import { ActionButton, ActionForm, SubmitButton } from "@/components/forms";
-import { MatchList } from "@/components/tournament/match-list";
+import { MatchList, PlateTag } from "@/components/tournament/match-list";
 import { TableSelect } from "@/components/tournament/table-select";
 import { DrawCard } from "@/components/tournament/draw-card";
 import { WalkoverControl } from "@/components/tournament/walkover-control";
-import { ButtonLink, Card, CardHeader, EmptyState, PageSkeleton, Select } from "@/components/ui";
+import { ButtonLink, Card, CardHeader, cx, EmptyState, PageSkeleton, Select } from "@/components/ui";
 
 export default function ControlRoomPage({ params }: PageProps<"/admin/tournaments/[id]">) {
   return (
@@ -331,7 +331,7 @@ async function ControlRoom({ params }: { params: PageProps<"/admin/tournaments/[
             <Card>
               <CardHeader title={`Ready to play (${ready.length})`} subtitle={`Both ${word === "pairs" ? "pairs" : "players"} known — assign a table and start`} />
               {ready.length ? (
-                <MatchList matches={ready} names={names} labels={labels} linkFor={scoreLink} actions={matchActions} />
+                <RoundSections matches={ready} names={names} labels={labels} linkFor={scoreLink} actions={matchActions} />
               ) : (
                 <p className="px-5 py-4 text-sm text-muted">Nothing waiting.</p>
               )}
@@ -345,7 +345,7 @@ async function ControlRoom({ params }: { params: PageProps<"/admin/tournaments/[
             {waiting.length > 0 && (
               <Card>
                 <CardHeader title={`Waiting for ${word} (${waiting.length})`} />
-                <MatchList matches={waiting} names={names} labels={labels} />
+                <RoundSections matches={waiting} names={names} labels={labels} />
               </Card>
             )}
           </div>
@@ -355,4 +355,31 @@ async function ControlRoom({ params }: { params: PageProps<"/admin/tournaments/[
       )}
     </div>
   );
+}
+
+/**
+ * A match list split by round, in the order to call them, with a heading per round and plate rounds
+ * marked, so the plate's matches aren't mistaken for the main draw's. One round: a plain list.
+ */
+function RoundSections(props: Parameters<typeof MatchList>[0] & { labels: Map<string, string> }) {
+  const sections = roundSections(props.matches, props.labels);
+  if (sections.length < 2) return <MatchList {...props} matches={sections[0]?.matches ?? []} />;
+  return sections.map((s, i) => (
+    <section key={s.title} className={cx(i > 0 && "border-t border-border")}>
+      <h3
+        className={cx(
+          "flex items-center gap-2 border-b border-border px-5 py-2 text-sm font-semibold",
+          s.plate ? "bg-warn/10" : "bg-surface-2",
+        )}
+      >
+        {s.plate && <PlateTag />}
+        {s.plate ? s.title.replace(/^Plate /, "") : s.title}
+        <span className="font-normal text-muted">
+          {s.matches.length} match{s.matches.length === 1 ? "" : "es"}
+        </span>
+      </h3>
+      {/* The heading names the round; group matches keep their group's name. */}
+      <MatchList {...props} matches={s.matches} labels={s.title === "Group stage" ? props.labels : undefined} />
+    </section>
+  ));
 }
